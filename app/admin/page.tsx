@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card'
 import Link from 'next/link'
-import { HeartPulse, ArrowLeft, Settings, Bug, AlertTriangle, CheckCircle } from 'lucide-react'
+import { HeartPulse, ArrowLeft, Settings, Bug, AlertTriangle, CheckCircle, Info } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 
 // Component that uses search params
@@ -17,6 +17,7 @@ function AdminContent() {
   const [errorDetails, setErrorDetails] = useState('')
   const [loading, setLoading] = useState(false)
   const [debugInfo, setDebugInfo] = useState<any>(null)
+  const [showVercelInfo, setShowVercelInfo] = useState(false)
   
   // Get the search params to display the key (masked)
   const searchParams = useSearchParams()
@@ -81,8 +82,9 @@ function AdminContent() {
       const data = await res.json()
       
       if (res.ok && data.success) {
-        setMessage('Configuration saved successfully!')
+        setMessage(data.message || 'Configuration saved successfully!')
         setApiKey('') // Clear API key field after saving
+        setShowVercelInfo(true) // Show Vercel info when saving succeeds
       } else {
         console.error('API error response:', data)
         setMessage(`Failed to save configuration: ${data.error || 'Unknown error'}`)
@@ -116,6 +118,38 @@ function AdminContent() {
           </div>
           <h1 className="text-2xl font-semibold text-blue-100">Health Insights Admin</h1>
         </div>
+        
+        {/* Vercel Environment Variables Info */}
+        {showVercelInfo && (
+          <Card className="border border-blue-900/30 bg-blue-900/10 backdrop-blur-sm mb-6">
+            <CardHeader className="border-b border-blue-900/20 pb-3">
+              <CardTitle className="flex items-center gap-2 text-xl text-blue-100">
+                <Info className="h-5 w-5 text-blue-400" />
+                Vercel Environment Variables
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-4">
+              <p className="text-blue-100">
+                When deploying to Vercel, configuration changes must be made through the Vercel dashboard:
+              </p>
+              <ol className="list-decimal list-inside space-y-2 text-blue-200">
+                <li>Go to your Vercel project dashboard</li>
+                <li>Navigate to "Settings" → "Environment Variables"</li>
+                <li>Add or update the following variables:
+                  <ul className="ml-6 mt-1 list-disc text-sm text-blue-300">
+                    <li><code className="bg-blue-950/50 px-1.5 py-0.5 rounded">SYSTEM_PROMPT</code> - Your AI system instructions</li>
+                    <li><code className="bg-blue-950/50 px-1.5 py-0.5 rounded">GEMINI_API_KEY</code> - Your Gemini API key</li>
+                  </ul>
+                </li>
+                <li>Save changes and redeploy your application</li>
+              </ol>
+              <div className="bg-blue-950/30 p-3 rounded text-sm text-blue-200 mt-2">
+                <p className="font-medium">Note:</p>
+                <p>Any changes made here are logged but not permanently saved on Vercel's serverless platform.</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
         
         {/* Debug Card */}
         <Card className="border border-yellow-900/30 bg-yellow-900/10 backdrop-blur-sm mb-6">
@@ -192,9 +226,9 @@ function AdminContent() {
             </div>
             
             {message && (
-              <div className={`p-3 rounded ${message.includes('success') ? 'bg-green-900/20 border border-green-900/30 text-green-300' : 'bg-red-900/20 border border-red-900/30 text-red-300'}`}>
+              <div className={`p-3 rounded ${message.includes('success') || message.includes('dashboard') ? 'bg-green-900/20 border border-green-900/30 text-green-300' : 'bg-red-900/20 border border-red-900/30 text-red-300'}`}>
                 <div className="flex gap-2 items-start">
-                  {message.includes('success') ? (
+                  {message.includes('success') || message.includes('dashboard') ? (
                     <CheckCircle className="h-5 w-5 text-green-400 flex-shrink-0 mt-0.5" />
                   ) : (
                     <AlertTriangle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
