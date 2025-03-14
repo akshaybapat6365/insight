@@ -17,11 +17,11 @@ module.exports = {
     extend: {
       colors: {
         medical: {
-          primary: '#0077b6', // Deep blue
-          secondary: '#14b8a6', // Teal
-          accent: '#4cc9f0', // Light blue
-          dark: '#0d1b2a', // Very dark blue for backgrounds
-          light: '#e0f2fe', // Very light blue for text on dark backgrounds
+          primary: '#121212', // Dark gray
+          secondary: '#333333', // Medium gray
+          accent: '#666666', // Light gray
+          dark: '#000000', // Pure black for backgrounds
+          light: '#e5e5e5', // Light gray for text on dark backgrounds
         },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -67,28 +67,28 @@ module.exports = {
           css: {
             color: theme('colors.gray.200'),
             a: {
-              color: theme('colors.blue.400'),
+              color: theme('colors.gray.400'),
               '&:hover': {
-                color: theme('colors.blue.300'),
+                color: theme('colors.gray.300'),
               },
             },
             h1: {
-              color: theme('colors.blue.200'),
+              color: theme('colors.gray.200'),
             },
             h2: {
-              color: theme('colors.blue.200'),
+              color: theme('colors.gray.200'),
             },
             h3: {
-              color: theme('colors.blue.200'),
+              color: theme('colors.gray.200'),
             },
             h4: {
-              color: theme('colors.blue.200'),
+              color: theme('colors.gray.200'),
             },
             strong: {
-              color: theme('colors.blue.300'),
+              color: theme('colors.gray.300'),
             },
             code: {
-              color: theme('colors.blue.300'),
+              color: theme('colors.gray.300'),
             },
           },
         },

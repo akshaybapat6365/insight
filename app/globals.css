@@ -3,50 +3,46 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 226, 232, 240;
-  --background-start-rgb: 15, 23, 42;
-  --background-end-rgb: 23, 37, 84;
+  --foreground-rgb: 229, 231, 235;
+  --background-start-rgb: 0, 0, 0;
+  --background-end-rgb: 10, 10, 10;
 }
 
 body {
   color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      rgb(var(--background-start-rgb)),
-      rgb(var(--background-end-rgb))
-    );
+  background: rgb(var(--background-start-rgb));
   min-height: 100vh;
 }
 
 @layer base {
   :root {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 0 0% 0%;
+    --foreground: 0 0% 98%;
     
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 0 0% 3%;
+    --card-foreground: 0 0% 98%;
     
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 0 0% 3%;
+    --popover-foreground: 0 0% 98%;
     
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 0 0% 15%;
+    --primary-foreground: 0 0% 98%;
     
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 0 0% 98%;
     
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 63%;
     
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 0 0% 10%;
+    --accent-foreground: 0 0% 98%;
     
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 98%;
     
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    --border: 0 0% 15%;
+    --input: 0 0% 15%;
+    --ring: 0 0% 30%;
   }
 }
 
@@ -61,12 +57,12 @@ body {
 }
 
 .prose strong {
-  color: #93c5fd;
+  color: #e5e7eb;
   font-weight: 600;
 }
 
 .prose h1, .prose h2, .prose h3, .prose h4 {
-  color: #93c5fd;
+  color: #f3f4f6;
   margin-top: 1.5em;
   margin-bottom: 0.5em;
   font-weight: 600;
@@ -85,12 +81,12 @@ body {
 }
 
 .prose a {
-  color: #60a5fa;
+  color: #9ca3af;
   text-decoration: underline;
 }
 
 .prose code {
-  background-color: rgba(30, 41, 59, 0.7);
+  background-color: rgba(23, 23, 23, 0.7);
   padding: 0.2em 0.4em;
   border-radius: 0.25em;
   font-size: 0.9em;
@@ -125,19 +121,19 @@ body {
 }
 
 .message-user {
-  @apply bg-medical-light text-medical-dark p-3 rounded-lg mb-2 max-w-[80%] self-end;
+  @apply bg-gray-800 text-gray-100 p-3 rounded-lg mb-2 max-w-[80%] self-end;
 }
 
 .message-ai {
-  @apply bg-medical-primary text-white p-3 rounded-lg mb-2 max-w-[80%] self-start;
+  @apply bg-gray-900 text-gray-100 p-3 rounded-lg mb-2 max-w-[80%] self-start;
 }
 
 .chat-input {
-  @apply w-full p-3 border border-medical-primary rounded-lg bg-white dark:bg-medical-dark dark:text-medical-light;
+  @apply w-full p-3 border border-gray-700 rounded-lg bg-black text-gray-100;
 }
 
 .header {
-  @apply bg-medical-primary text-white p-4 mb-6 shadow-md;
+  @apply bg-black text-white p-4 mb-6 shadow-md;
 }
 
 .header h1 {
@@ -145,5 +141,5 @@ body {
 }
 
 .header p {
-  @apply text-medical-light;
+  @apply text-gray-400;
 }
