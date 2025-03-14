@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card'
 import Link from 'next/link'
-import { HeartPulse, ArrowLeft, Settings, Bug } from 'lucide-react'
+import { HeartPulse, ArrowLeft, Settings, Bug, AlertTriangle, CheckCircle } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 
 // Component that uses search params
@@ -14,6 +14,7 @@ function AdminContent() {
   const [systemPrompt, setSystemPrompt] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [message, setMessage] = useState('')
+  const [errorDetails, setErrorDetails] = useState('')
   const [loading, setLoading] = useState(false)
   const [debugInfo, setDebugInfo] = useState<any>(null)
   
@@ -36,22 +37,38 @@ function AdminContent() {
 
   useEffect(() => {
     // Load the current system prompt
+    setLoading(true)
     fetch('/api/admin/config')
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) {
+          throw new Error(`HTTP error ${res.status}: ${res.statusText}`)
+        }
+        return res.json()
+      })
       .then(data => {
+        console.log('Loaded config:', data)
         setSystemPrompt(data.systemPrompt || '')
+        setMessage('')
+        setErrorDetails('')
       })
       .catch(err => {
         console.error('Failed to load config:', err)
         setMessage('Failed to load current configuration')
+        setErrorDetails(err.message || 'Unknown error')
+      })
+      .finally(() => {
+        setLoading(false)
       })
   }, [])
 
   const saveConfig = async () => {
     setLoading(true)
     setMessage('')
+    setErrorDetails('')
     
     try {
+      console.log('Saving config with system prompt length:', systemPrompt.length)
+      
       const res = await fetch('/api/admin/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -67,11 +84,14 @@ function AdminContent() {
         setMessage('Configuration saved successfully!')
         setApiKey('') // Clear API key field after saving
       } else {
+        console.error('API error response:', data)
         setMessage(`Failed to save configuration: ${data.error || 'Unknown error'}`)
+        setErrorDetails(JSON.stringify(data, null, 2))
       }
     } catch (error) {
       console.error('Error saving config:', error)
       setMessage('Error saving configuration')
+      setErrorDetails(error instanceof Error ? error.message : 'Unknown error')
     } finally {
       setLoading(false)
     }
@@ -154,6 +174,7 @@ function AdminContent() {
                 onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setSystemPrompt(e.target.value)}
                 placeholder="Enter the system prompt for the health assistant..."
                 className="bg-gray-800/50 border-blue-900/30 text-gray-100 focus-visible:ring-blue-500"
+                disabled={loading}
               />
               <p className="text-xs text-gray-400">This is the base prompt that instructs the AI how to analyze health data</p>
             </div>
@@ -166,12 +187,27 @@ function AdminContent() {
                 onChange={(e: ChangeEvent<HTMLInputElement>) => setApiKey(e.target.value)}
                 placeholder="Enter new Gemini API key" 
                 className="bg-gray-800/50 border-blue-900/30 text-gray-100 focus-visible:ring-blue-500"
+                disabled={loading}
               />
             </div>
             
             {message && (
               <div className={`p-3 rounded ${message.includes('success') ? 'bg-green-900/20 border border-green-900/30 text-green-300' : 'bg-red-900/20 border border-red-900/30 text-red-300'}`}>
-                {message}
+                <div className="flex gap-2 items-start">
+                  {message.includes('success') ? (
+                    <CheckCircle className="h-5 w-5 text-green-400 flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertTriangle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+                  )}
+                  <div>
+                    <p className="font-medium">{message}</p>
+                    {errorDetails && (
+                      <pre className="mt-2 p-2 bg-black/20 rounded text-xs overflow-x-auto">
+                        {errorDetails}
+                      </pre>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </CardContent>
