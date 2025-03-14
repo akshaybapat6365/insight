@@ -1,8 +1,8 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import fs from 'fs';
 import path from 'path';
 
-export const geminiModel = "gemini-2.0-flash-thinking-exp-01-21"; // Latest Gemini model
+export const geminiModel = "gemini-2.0-pro-exp-02-05"; // Updated to latest Gemini 2.0 Pro Experimental model
 
 // Path to store configuration
 const CONFIG_PATH = path.join(process.cwd(), 'config.json');
@@ -27,21 +27,27 @@ function getApiKey(): string {
 }
 
 // Initialize the Google AI SDK with the API key from config or environment
-export const genAI = new GoogleGenerativeAI(getApiKey());
+export const genAI = new GoogleGenAI({
+  apiKey: getApiKey()
+});
 
 /**
  * Creates a new instance of the Google AI SDK with the latest API key
  * This ensures we always use the most up-to-date API key from the config
  */
-export function createFreshGeminiClient(): GoogleGenerativeAI {
-  return new GoogleGenerativeAI(getApiKey());
+export function createFreshGeminiClient(): GoogleGenAI {
+  return new GoogleGenAI({
+    apiKey: getApiKey()
+  });
 }
 
 // Create a function to generate content with Gemini
 export async function generateContentWithGemini(prompt: string) {
   // Always create a fresh client to ensure we have the latest API key
   const freshClient = createFreshGeminiClient();
-  const model = freshClient.getGenerativeModel({ model: geminiModel });
-  const result = await model.generateContent(prompt);
-  return result.response.text();
+  const result = await freshClient.models.generateContent({
+    model: geminiModel,
+    contents: prompt
+  });
+  return result.text;
 } 
