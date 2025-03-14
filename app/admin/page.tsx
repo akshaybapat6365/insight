@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, ChangeEvent } from 'react'
+import { useState, useEffect, ChangeEvent, Suspense } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
@@ -9,7 +9,8 @@ import Link from 'next/link'
 import { HeartPulse, ArrowLeft, Settings, Bug } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 
-export default function AdminPage() {
+// Component that uses search params
+function AdminContent() {
   const [systemPrompt, setSystemPrompt] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [message, setMessage] = useState('')
@@ -186,5 +187,25 @@ export default function AdminPage() {
         </Card>
       </div>
     </div>
-  )
+  );
+}
+
+// Main admin page with suspense boundary
+export default function AdminPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-b from-gray-950 to-blue-950 py-8 flex items-center justify-center">
+        <div className="bg-gray-900/70 p-6 rounded-lg border border-blue-900/30 shadow-xl">
+          <h2 className="text-xl font-medium text-blue-100 mb-3">Loading Admin Panel...</h2>
+          <div className="flex space-x-2 justify-center">
+            <div className="h-3 w-3 bg-blue-500 rounded-full animate-pulse"></div>
+            <div className="h-3 w-3 bg-blue-500 rounded-full animate-pulse delay-75"></div>
+            <div className="h-3 w-3 bg-blue-500 rounded-full animate-pulse delay-150"></div>
+          </div>
+        </div>
+      </div>
+    }>
+      <AdminContent />
+    </Suspense>
+  );
 } 
