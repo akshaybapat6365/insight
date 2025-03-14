@@ -31,9 +31,14 @@ export default function Chat() {
   // Add this near the top of the component
   console.log('Admin key from env:', process.env.NEXT_PUBLIC_ADMIN_KEY || 'not set');
   
-  // Create a hardcoded admin URL for now to debug
-  const adminUrl = `/admin?key=${process.env.NEXT_PUBLIC_ADMIN_KEY || 'adminpass'}`;
-  console.log('Admin URL:', adminUrl);
+  // Using a fixed admin password for simplicity
+  // In production, you should use a more secure method
+  const adminPassword = 'adminpass'; // Use the same value you set in Vercel
+  console.log('Using admin password:', adminPassword);
+  
+  // Create an explicit admin URL with the key parameter
+  const adminUrl = `/admin?key=${adminPassword}`;
+  console.log('Admin URL (direct link):', adminUrl);
 
   // Handler for when a file is processed
   const handleFileProcessed = (text: string) => {
@@ -69,19 +74,13 @@ export default function Chat() {
           </div>
           {/* Debug the link issue by trying both Link and regular anchor */}
           <div className="flex gap-2">
-            <Link 
-              href={adminUrl}
-              className="text-blue-300 hover:text-blue-100 text-sm underline"
-              onClick={() => console.log('Admin link clicked via Link component')}
-            >
-              Admin Console
-            </Link>
+            {/* Regular anchor tag for direct navigation */}
             <a 
               href={adminUrl}
-              className="text-green-300 hover:text-green-100 text-sm underline"
-              onClick={() => console.log('Admin link clicked via anchor tag')}
+              className="text-blue-300 hover:text-blue-100 text-sm underline"
+              onClick={() => console.log('Admin link clicked (anchor tag)')}
             >
-              Admin (Direct)
+              Admin Console
             </a>
           </div>
         </div>
