@@ -28,6 +28,13 @@ export default function Chat() {
     },
   });
 
+  // Add this near the top of the component
+  console.log('Admin key from env:', process.env.NEXT_PUBLIC_ADMIN_KEY || 'not set');
+  
+  // Create a hardcoded admin URL for now to debug
+  const adminUrl = `/admin?key=${process.env.NEXT_PUBLIC_ADMIN_KEY || 'adminpass'}`;
+  console.log('Admin URL:', adminUrl);
+
   // Handler for when a file is processed
   const handleFileProcessed = (text: string) => {
     setInput(text);
@@ -60,12 +67,23 @@ export default function Chat() {
             </div>
             <h1 className="text-lg font-medium text-blue-100">Health Insights AI</h1>
           </div>
-          <Link 
-            href={`/admin?key=${process.env.NEXT_PUBLIC_ADMIN_KEY || 'adminpass'}`} 
-            className="text-blue-300 hover:text-blue-100 text-sm underline"
-          >
-            Admin Console
-          </Link>
+          {/* Debug the link issue by trying both Link and regular anchor */}
+          <div className="flex gap-2">
+            <Link 
+              href={adminUrl}
+              className="text-blue-300 hover:text-blue-100 text-sm underline"
+              onClick={() => console.log('Admin link clicked via Link component')}
+            >
+              Admin Console
+            </Link>
+            <a 
+              href={adminUrl}
+              className="text-green-300 hover:text-green-100 text-sm underline"
+              onClick={() => console.log('Admin link clicked via anchor tag')}
+            >
+              Admin (Direct)
+            </a>
+          </div>
         </div>
       </header>
       
