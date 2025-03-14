@@ -2,10 +2,8 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export function middleware(request: NextRequest) {
-  // Check if the URL starts with /admin or /admin-test or /admin-simple
-  if (request.nextUrl.pathname.startsWith('/admin') || 
-      request.nextUrl.pathname.startsWith('/admin-test') ||
-      request.nextUrl.pathname.startsWith('/admin-simple')) {
+  // Check if the URL starts with /admin
+  if (request.nextUrl.pathname.startsWith('/admin')) {
     console.log('Protected route accessed:', request.nextUrl.pathname);
     
     // Get the admin password from query parameter
@@ -22,7 +20,6 @@ export function middleware(request: NextRequest) {
     // In a real app, use proper authentication with NextAuth.js or similar
     if (adminPassword !== expectedPassword) {
       console.log('Password mismatch, redirecting to home');
-      console.log('Expected:', expectedPassword, 'Received:', adminPassword);
       return NextResponse.redirect(new URL('/', request.url))
     }
     
@@ -33,5 +30,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/admin-test/:path*', '/admin-simple/:path*']
+  matcher: ['/admin/:path*']
 } 
