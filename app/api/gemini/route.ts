@@ -3,15 +3,13 @@ import { streamText } from 'ai';
 import { HarmCategory, HarmBlockThreshold, GoogleGenerativeAI } from '@google/generative-ai';
 import fs from 'fs';
 import path from 'path';
+import { DEFAULT_SYSTEM_PROMPT } from '@/lib/constants';
 
 // Allow streaming responses up to 30 seconds
 export const maxDuration = 30;
 
 // Path to store configuration
 const CONFIG_PATH = path.join(process.cwd(), 'config.json');
-
-// Default Health-specific system prompt
-export const DEFAULT_SYSTEM_PROMPT = "You are a health analysis assistant that helps users understand their bloodwork and medical reports. You explain lab results in simple terms and provide general health insights. You always remind users that you are not providing medical advice and they should consult with healthcare professionals.";
 
 /**
  * Gets the current system prompt from config file or returns the default
