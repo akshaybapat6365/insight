@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export function middleware(request: NextRequest) {
-  // Check if the URL starts with /admin or /admin-test
+  // Check if the URL starts with /admin or /admin-test or /admin-simple
   if (request.nextUrl.pathname.startsWith('/admin') || 
-      request.nextUrl.pathname.startsWith('/admin-test')) {
+      request.nextUrl.pathname.startsWith('/admin-test') ||
+      request.nextUrl.pathname.startsWith('/admin-simple')) {
     console.log('Protected route accessed:', request.nextUrl.pathname);
     
     // Get the admin password from query parameter
@@ -32,5 +33,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/admin-test/:path*']
+  matcher: ['/admin/:path*', '/admin-test/:path*', '/admin-simple/:path*']
 } 
