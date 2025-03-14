@@ -6,13 +6,32 @@ import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card'
 import Link from 'next/link'
-import { HeartPulse, ArrowLeft, Settings } from 'lucide-react'
+import { HeartPulse, ArrowLeft, Settings, Bug } from 'lucide-react'
+import { useSearchParams } from 'next/navigation'
 
 export default function AdminPage() {
   const [systemPrompt, setSystemPrompt] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  const [debugInfo, setDebugInfo] = useState<any>(null)
+  
+  // Get the search params to display the key (masked)
+  const searchParams = useSearchParams()
+  const keyParam = searchParams.get('key')
+  
+  // Get debug info
+  useEffect(() => {
+    fetch('/api/admin-debug')
+      .then(res => res.json())
+      .then(data => {
+        setDebugInfo(data)
+        console.log('Admin debug info:', data)
+      })
+      .catch(err => {
+        console.error('Failed to load debug info:', err)
+      })
+  }, [])
 
   useEffect(() => {
     // Load the current system prompt
@@ -76,6 +95,47 @@ export default function AdminPage() {
           </div>
           <h1 className="text-2xl font-semibold text-blue-100">Health Insights Admin</h1>
         </div>
+        
+        {/* Debug Card */}
+        <Card className="border border-yellow-900/30 bg-yellow-900/10 backdrop-blur-sm mb-6">
+          <CardHeader className="border-b border-yellow-900/20 pb-3">
+            <CardTitle className="flex items-center gap-2 text-xl text-yellow-100">
+              <Bug className="h-5 w-5 text-yellow-400" />
+              Debug Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-4">
+            <div>
+              <h3 className="text-sm font-medium text-yellow-200 mb-2">Access Parameters</h3>
+              <div className="bg-gray-900/50 p-3 rounded text-xs font-mono">
+                <p>URL key parameter: {keyParam ? '✅ Present' : '❌ Missing'}</p>
+                {keyParam && <p>Key parameter value: {keyParam.substring(0, 2)}{'*'.repeat(Math.max(0, keyParam.length - 4))}{keyParam.substring(keyParam.length - 2)}</p>}
+              </div>
+            </div>
+            
+            {debugInfo && (
+              <div>
+                <h3 className="text-sm font-medium text-yellow-200 mb-2">Environment Variables</h3>
+                <div className="bg-gray-900/50 p-3 rounded text-xs font-mono">
+                  <p>ADMIN_PASSWORD set: {debugInfo.admin_password_set ? '✅ Yes' : '❌ No'}</p>
+                  <p>NEXT_PUBLIC_ADMIN_KEY set: {debugInfo.public_admin_key_set ? '✅ Yes' : '❌ No'}</p>
+                  <p>ADMIN_PASSWORD length: {debugInfo.admin_password_sample ? debugInfo.admin_password_sample.length : 0}</p>
+                  <p>NEXT_PUBLIC_ADMIN_KEY length: {debugInfo.public_admin_key_sample ? debugInfo.public_admin_key_sample.length : 0}</p>
+                </div>
+              </div>
+            )}
+            
+            <div>
+              <h3 className="text-sm font-medium text-yellow-200 mb-2">Troubleshooting Tips</h3>
+              <ul className="list-disc list-inside text-xs text-yellow-100/80 space-y-1">
+                <li>Ensure the 'key' parameter matches the ADMIN_PASSWORD environment variable</li>
+                <li>Check for proper URL encoding in the key parameter</li>
+                <li>Verify both environment variables are set in Vercel</li>
+                <li>Try clearing browser cache or using incognito mode</li>
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
         
         <Card className="border border-blue-900/30 bg-gray-900/70 backdrop-blur-sm">
           <CardHeader className="border-b border-blue-900/20 pb-3">
