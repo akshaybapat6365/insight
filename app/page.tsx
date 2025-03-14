@@ -29,15 +29,15 @@ export default function Chat() {
   });
 
   // Add this near the top of the component
-  console.log('Admin key from env:', process.env.NEXT_PUBLIC_ADMIN_KEY || 'not set');
+  console.log('Admin key configured:', process.env.NEXT_PUBLIC_ADMIN_KEY ? '****' : 'not set');
   
   // Hardcoded admin password for reliable access
   const adminPassword = 'adminpass'; // IMPORTANT: This must match value in middleware.ts
-  console.log('Using admin password:', adminPassword);
+  console.log('Using admin password:', '[REDACTED]');
   
   // Admin URL with password parameter
   const adminUrl = `/admin?key=${adminPassword}`;
-  console.log('Admin URL:', adminUrl);
+  console.log('Admin URL configured');
 
   // Handler for when a file is processed
   const handleFileProcessed = (text: string) => {
@@ -98,92 +98,70 @@ export default function Chat() {
       
       {/* Chat container */}
       <div className="flex-1 overflow-auto p-4 container">
-        <div className="max-w-3xl mx-auto">
-          {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center p-8">
-              <div className="h-20 w-20 rounded-full bg-blue-900/20 flex items-center justify-center mb-6">
-                <Microscope className="h-10 w-10 text-blue-400" />
+        {/* System status indicator */}
+        {error && (
+          <div className="mb-4 p-4 rounded-lg bg-red-900/50 border border-red-700 text-red-100 animate-pulse">
+            <h3 className="font-medium mb-1">Error connecting to AI</h3>
+            <p className="text-sm">{error.message || "The AI service is currently unavailable. Please try again later."}</p>
+          </div>
+        )}
+        
+        {/* Only show status indicator when the system is active */}
+        {(status === 'streaming' || status === 'submitted' || status === 'ready') && !error && (
+          <div className="mb-4 p-3 rounded-lg bg-blue-900/30 border border-blue-800 text-blue-100">
+            <p className="text-sm flex items-center gap-2">
+              <span className={`h-2 w-2 rounded-full ${isLoading ? 'bg-green-400 animate-pulse' : 'bg-blue-400'}`}></span>
+              {isLoading ? "AI is thinking..." : `Status: ${status}`}
+            </p>
+          </div>
+        )}
+        
+        {messages.length === 0 && (
+          <div className="text-center py-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-900/20 mb-4">
+              <Microscope className="h-8 w-8 text-blue-400" />
+            </div>
+            <h2 className="text-xl font-medium text-blue-100 mb-2">Welcome to Health Insights AI</h2>
+            <p className="text-blue-300 mb-6 max-w-md mx-auto">Upload your health data or ask questions about medical terminology and lab results.</p>
+          </div>
+        )}
+        
+        <div className="space-y-4 mb-4">
+          {messages.map((message, i) => (
+            <div
+              key={i}
+              className={`p-4 rounded-lg ${
+                message.role === 'user'
+                  ? 'bg-blue-900/40 border border-blue-800 text-white'
+                  : 'bg-gray-800/70 border border-gray-700 text-gray-100'
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                {message.role === 'user' ? (
+                  <User className="h-5 w-5 text-blue-400" />
+                ) : (
+                  <Bot className="h-5 w-5 text-gray-400" />
+                )}
+                <p className="text-sm font-medium">
+                  {message.role === 'user' ? 'You' : 'Health AI'}
+                </p>
               </div>
-              <h2 className="text-2xl font-semibold text-blue-200 mb-3">Health Insights Assistant</h2>
-              <p className="text-blue-300/80 mb-6 max-w-md">
-                Upload your bloodwork or health reports, or simply ask questions about health metrics, normal ranges, and what your results might mean.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-lg">
-                <Button 
-                  className="bg-blue-950/30 border border-blue-800/30 text-blue-300 hover:bg-blue-900/20" 
-                  onClick={() => handleSendMessage("What are normal vitamin D levels?")}
-                >
-                  Normal vitamin D levels
-                </Button>
-                <Button 
-                  className="bg-blue-950/30 border border-blue-800/30 text-blue-300 hover:bg-blue-900/20" 
-                  onClick={() => handleSendMessage("What does high cholesterol mean?")}
-                >
-                  About high cholesterol
-                </Button>
-                <Button 
-                  className="bg-blue-950/30 border border-blue-800/30 text-blue-300 hover:bg-blue-900/20" 
-                  onClick={() => handleSendMessage("What blood tests should I get for a general checkup?")}
-                >
-                  Recommended blood tests
-                </Button>
-                <Button 
-                  className="bg-blue-950/30 border border-blue-800/30 text-blue-300 hover:bg-blue-900/20" 
-                  onClick={() => handleSendMessage("How can I improve my iron levels naturally?")}
-                >
-                  Natural iron boosters
-                </Button>
+              <div className="prose prose-invert prose-sm max-w-none">
+                <ReactMarkdown>{message.content}</ReactMarkdown>
               </div>
             </div>
-          ) : (
-            <div className="space-y-4 py-5">
-              {messages.map((message, index) => (
-                <div
-                  key={index}
-                  className={`flex items-start gap-4 ${
-                    message.role === 'user' ? 'justify-end' : 'justify-start'
-                  }`}
-                >
-                  {message.role !== 'user' && (
-                    <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
-                      <Bot className="h-5 w-5 text-white" />
-                    </div>
-                  )}
-                  <div
-                    className={`p-4 rounded-lg max-w-[85%] ${
-                      message.role === 'user'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-800/70 text-gray-100 border border-blue-900/30'
-                    }`}
-                  >
-                    <div className="prose prose-invert">
-                      <ReactMarkdown>{message.content}</ReactMarkdown>
-                    </div>
-                  </div>
-                  {message.role === 'user' && (
-                    <div className="h-8 w-8 rounded-full bg-blue-800 flex items-center justify-center flex-shrink-0">
-                      <User className="h-5 w-5 text-white" />
-                    </div>
-                  )}
-                </div>
-              ))}
-              {isLoading && (
-                <div className="flex items-start gap-4">
-                  <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
-                    <Bot className="h-5 w-5 text-white" />
-                  </div>
-                  <div className="p-4 rounded-lg bg-gray-800/70 text-gray-100 border border-blue-900/30">
-                    <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 bg-blue-400 rounded-full animate-pulse"></div>
-                      <div className="h-2 w-2 bg-blue-400 rounded-full animate-pulse delay-75"></div>
-                      <div className="h-2 w-2 bg-blue-400 rounded-full animate-pulse delay-150"></div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          ))}
         </div>
+        
+        {isLoading && messages.length > 0 && (
+          <div className="flex justify-center my-4">
+            <div className="animate-pulse flex space-x-2">
+              <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+              <div className="w-2 h-2 bg-blue-400 rounded-full animation-delay-200"></div>
+              <div className="w-2 h-2 bg-blue-400 rounded-full animation-delay-400"></div>
+            </div>
+          </div>
+        )}
       </div>
       
       {/* Input area */}
@@ -206,23 +184,6 @@ export default function Chat() {
           </p>
         </div>
       </div>
-      
-      {error && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/50">
-          <div className="bg-gray-900 border border-red-900/30 p-6 rounded-lg shadow-xl max-w-md">
-            <h3 className="text-xl font-semibold text-red-400 mb-2">Error</h3>
-            <p className="text-gray-300 mb-4">{error.message || "An error occurred analyzing your health data."}</p>
-            <div className="flex justify-end">
-              <Button
-                onClick={() => reload()}
-                className="bg-blue-600 hover:bg-blue-500 text-white"
-              >
-                Retry
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
