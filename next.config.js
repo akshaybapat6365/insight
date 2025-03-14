@@ -6,6 +6,9 @@ const nextConfig = {
       bodySizeLimit: '10mb', // Increase the body size limit for file uploads
     },
   },
+  env: {
+    NEXT_PUBLIC_ADMIN_KEY: process.env.NEXT_PUBLIC_ADMIN_KEY || 'adminpass',
+  },
 };
 
 module.exports = nextConfig;

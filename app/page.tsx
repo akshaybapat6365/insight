@@ -60,7 +60,10 @@ export default function Chat() {
             </div>
             <h1 className="text-lg font-medium text-blue-100">Health Insights AI</h1>
           </div>
-          <Link href="/admin" className="text-blue-300 hover:text-blue-100 text-sm underline">
+          <Link 
+            href={`/admin?key=${process.env.NEXT_PUBLIC_ADMIN_KEY || 'adminpass'}`} 
+            className="text-blue-300 hover:text-blue-100 text-sm underline"
+          >
             Admin Console
           </Link>
         </div>
