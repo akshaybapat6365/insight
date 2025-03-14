@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
-import { DEFAULT_SYSTEM_PROMPT } from '../../gemini/route'
+import { DEFAULT_SYSTEM_PROMPT } from '@/lib/constants'
 
 const CONFIG_PATH = path.join(process.cwd(), 'config.json')
 
