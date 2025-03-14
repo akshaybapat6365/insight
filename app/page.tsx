@@ -86,6 +86,12 @@ export default function Chat() {
             >
               <span>Admin Access Test</span>
             </a>
+            <a
+              href="/test-upload"
+              className="text-yellow-300 hover:text-yellow-100 text-sm flex items-center gap-1.5"
+            >
+              <span>File Upload Test</span>
+            </a>
           </div>
         </div>
       </header>
