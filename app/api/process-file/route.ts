@@ -34,81 +34,49 @@ export async function POST(request: Request) {
       )
     }
     
-    // Load configuration
-    const appConfig = loadConfig()
-    
-    // Check for API key
-    const apiKey = appConfig.apiKey || process.env.GEMINI_API_KEY || ''
-    if (!apiKey) {
-      console.error('Gemini API key not configured')
+    // Route based on file type
+    let processingRoute = '';
+    if (file.type === 'application/pdf' || 
+        file.type === 'image/jpeg' || 
+        file.type === 'image/png' || 
+        file.type === 'image/jpg') {
+      processingRoute = '/api/python-process-file';
+      console.log(`Forwarding ${file.type} file to ${processingRoute}`);
+    } else if (file.type === 'application/vnd.ms-excel' || 
+               file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+      // TODO: Implement Excel processing route
       return NextResponse.json(
-        { error: 'API key not configured. Please add a valid Gemini API key in the admin console.' },
-        { status: 500 }
-      )
+        { error: 'Excel files are not supported yet.' },
+        { status: 400 }
+      );
+    } else {
+      return NextResponse.json(
+        { error: `Unsupported file type: ${file.type}` },
+        { status: 400 }
+      );
     }
-    
-    // Get model configuration from the config
-    const primaryModelName = getGeminiModel()
-    const fallbackModelName = appConfig.fallbackModel || fallbackModel
-    const shouldUseFallback = appConfig.useFallback !== undefined ? appConfig.useFallback : true
-    const maxOutputTokens = appConfig.maxOutputTokens || 4096
-    
-    console.log(`Using Gemini with model: ${primaryModelName}`)
-    console.log(`Fallback enabled: ${shouldUseFallback}, fallback model: ${fallbackModelName}`)
-    
-    // Convert file to text
-    let fileText = ''
-    
-    // For debugging and demonstration, just use the file name as sample text
-    // In a production app, you would extract text from file
-    fileText = `Sample text from ${file.name}`
-    
-    // Try with primary model
+
+    // Forward the request to the appropriate processing route
     try {
-      const genAI = new GoogleGenerativeAI(apiKey)
-      const model = genAI.getGenerativeModel({ model: primaryModelName })
-      
-      // Create prompt for processing the document
-      const prompt = `Analyze this document and extract the key information in a clear, organized way: ${fileText}`
-      
-      const result = await model.generateContent(prompt)
-      
-      // Return extracted text
-      return NextResponse.json({ 
-        text: result.response.text(),
-        model: primaryModelName
-      })
-    } catch (error: any) {
-      console.error('Error with primary model:', error)
-      
-      if (!shouldUseFallback) {
-        return NextResponse.json(
-          { error: 'Failed to process file with primary model and fallback is disabled' },
-          { status: 500 }
-        )
+      const forwardedResponse = await fetch(new URL(processingRoute, request.url), {
+        method: 'POST',
+        body: formData, // Pass the original formData
+      });
+
+      if (!forwardedResponse.ok) {
+        const errorData = await forwardedResponse.json();
+        console.error('Error from processing route:', errorData);
+        return NextResponse.json(errorData, { status: forwardedResponse.status });
       }
-      
-      // Try fallback model
-      try {
-        console.log(`Attempting fallback to ${fallbackModelName}`)
-        const genAI = new GoogleGenerativeAI(apiKey)
-        const model = genAI.getGenerativeModel({ model: fallbackModelName })
-        
-        const prompt = `Analyze this document and extract the key information in a clear, organized way: ${fileText}`
-        const result = await model.generateContent(prompt)
-        
-        return NextResponse.json({ 
-          text: result.response.text(),
-          model: fallbackModelName,
-          fallback: true
-        })
-      } catch (fallbackError: any) {
-        console.error('Fallback model also failed:', fallbackError)
-        return NextResponse.json(
-          { error: 'Could not process file with any available models' },
-          { status: 500 }
-        )
-      }
+
+      const processedData = await forwardedResponse.json();
+      return NextResponse.json(processedData);
+    } catch (forwardError: any) {
+      console.error('Error forwarding request:', forwardError);
+      return NextResponse.json(
+        { error: `Error processing file: ${forwardError.message}` },
+        { status: 500 }
+      );
     }
   } catch (error: any) {
     console.error('Error processing file:', error)

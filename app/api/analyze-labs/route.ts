@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { loadConfig } from '@/lib/config';
 import { getGeminiModel, fallbackModel } from '@/lib/ai/gemini-provider';
 
@@ -67,84 +67,122 @@ export async function POST(request: Request) {
       );
     }
     
-    // Load configuration
-    const appConfig = loadConfig();
+    // First, we need to process the file to extract text
+    // We'll use the process-file route as a dispatcher
+    const processFormData = new FormData();
+    processFormData.append('file', file);
     
-    // Check for API key
-    const apiKey = appConfig.apiKey || process.env.GEMINI_API_KEY || '';
-    if (!apiKey) {
-      console.error('Gemini API key not configured');
-      return NextResponse.json(
-        { error: 'API key not configured. Please add a valid Gemini API key in the admin console.' },
-        { status: 500 }
-      );
-    }
+    console.log('Sending file to process-file route for text extraction');
     
-    // Configure AI settings
-    const modelName = getGeminiModel();
-    console.log(`Using model: ${modelName} for lab analysis - This is the experimental flash thinking model`);
-    
-    // Initialize the Gemini API client
     try {
-      const genAI = new GoogleGenerativeAI(apiKey);
-      
-      // Get the Gemini model
-      const model = genAI.getGenerativeModel({ model: modelName });
-      
-      // Convert file to text for processing
-      // Note: For a production app, you'd want to extract text from different file types properly
-      // This is a simplified example
-      const fileText = file.name + " - This is a placeholder for the actual file content processing";
-      
-      // Generate response with Gemini
-      const result = await model.generateContent([
-        SYSTEM_PROMPT,
-        "User message: " + userMessage,
-        "Lab report contents: " + fileText
-      ]);
-
-      // Return the analysis result
-      return NextResponse.json({ 
-        result: result.response.text(),
-        model: modelName,
-        success: true,
-        analysis: result.response.text()
+      const processResponse = await fetch(new URL('/api/process-file', request.url), {
+        method: 'POST',
+        body: processFormData,
       });
-    } catch (error: any) {
-      console.error('Error processing file with primary model:', error);
       
-      // Try with fallback model
-      try {
-        console.log(`Falling back to ${fallbackModel}`);
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: fallbackModel });
-        
-        const fileText = file.name + " - This is a placeholder for the actual file content processing";
-        
-        const result = await model.generateContent([
-          SYSTEM_PROMPT,
-          "User message: " + userMessage,
-          "Lab report contents: " + fileText
-        ]);
-        
-        return NextResponse.json({ 
-          result: result.response.text(),
-          model: fallbackModel,
-          fallback: true,
-          success: true,
-          analysis: result.response.text()
-        });
-      } catch (fallbackError: any) {
-        console.error('Fallback model also failed:', fallbackError);
+      if (!processResponse.ok) {
+        const errorData = await processResponse.json();
+        throw new Error(errorData.error || `Processing error: ${processResponse.status}`);
+      }
+      
+      const processedData = await processResponse.json();
+      
+      if (!processedData.text) {
+        throw new Error('No text extracted from file');
+      }
+      
+      const fileContents = processedData.text;
+      console.log('Successfully extracted text from file, length:', fileContents.length);
+      
+      // Load configuration
+      const config = loadConfig();
+      
+      // Check for API key
+      const apiKey = config.apiKey || process.env.GEMINI_API_KEY || '';
+      if (!apiKey) {
+        console.error('Gemini API key not configured');
         return NextResponse.json(
-          { 
-            error: 'Both primary and fallback AI models failed. Please try again later.',
-            originalError: error.message,
-            fallbackError: fallbackError.message
-          },
+          { error: 'API key not configured. Please add a valid Gemini API key in the admin console.' },
           { status: 500 }
         );
       }
+      
+      // Configure AI settings
+      const modelName = getGeminiModel();
+      console.log(`Using model: ${modelName} for lab analysis`);
+      
+      // Initialize the Gemini API client
+      const genAI = new GoogleGenAI({
+        apiKey: apiKey
+      });
+      
+      try {
+        // Generate response with Gemini
+        const result = await genAI.models.generateContent({
+          model: modelName,
+          contents: [
+            {
+              role: "user",
+              parts: [
+                { text: SYSTEM_PROMPT },
+                { text: "User message: " + userMessage },
+                { text: "Lab report contents: " + fileContents }
+              ]
+            }
+          ]
+        });
+
+        // Return the analysis result
+        return NextResponse.json({ 
+          success: true,
+          result: result.text,
+          model: modelName
+        });
+      } catch (error: any) {
+        console.error('Error processing file with primary model:', error);
+        
+        // Try with fallback model
+        try {
+          console.log(`Falling back to ${fallbackModel}`);
+          
+          const fallbackResult = await genAI.models.generateContent({
+            model: fallbackModel,
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  { text: SYSTEM_PROMPT },
+                  { text: "User message: " + userMessage },
+                  { text: "Lab report contents: " + fileContents }
+                ]
+              }
+            ]
+          });
+          
+          return NextResponse.json({ 
+            success: true,
+            result: fallbackResult.text,
+            model: fallbackModel,
+            fallback: true
+          });
+        } catch (fallbackError: any) {
+          console.error('Fallback model also failed:', fallbackError);
+          return NextResponse.json(
+            { 
+              error: 'Both primary and fallback AI models failed. Please try again later.',
+              originalError: error.message,
+              fallbackError: fallbackError.message
+            },
+            { status: 500 }
+          );
+        }
+      }
+    } catch (processingError: any) {
+      console.error('Error during file processing:', processingError);
+      return NextResponse.json(
+        { error: `Failed to process file: ${processingError.message}` },
+        { status: 500 }
+      );
     }
   } catch (error: any) {
     console.error('Error processing file:', error);
