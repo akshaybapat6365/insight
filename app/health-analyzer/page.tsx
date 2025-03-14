@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { FileUpload } from '@/components/file-upload';
 import Link from 'next/link';
-import { HeartPulse, ArrowLeft, FileText, Upload, RefreshCw, Microscope, Bot } from 'lucide-react';
+import { HeartPulse, ArrowLeft, FileText, Upload, RefreshCw, Microscope, Bot, AlertCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 export default function HealthAnalyzer() {
@@ -110,20 +110,17 @@ export default function HealthAnalyzer() {
   };
   
   return (
-    <div className="flex flex-col min-h-screen bg-gradient-to-b from-gray-950 to-blue-950">
+    <div className="flex flex-col min-h-screen bg-black">
       {/* Header */}
-      <header className="border-b border-blue-900/30 bg-gray-900/70 backdrop-blur-sm p-4">
+      <header className="border-b border-gray-800 bg-black p-4">
         <div className="container flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center">
-              <HeartPulse className="h-5 w-5 text-white" />
-            </div>
-            <h1 className="text-lg font-medium text-blue-100">Health Insights AI</h1>
+            <h1 className="text-lg font-medium text-white">Health Insights AI</h1>
           </div>
-          <div className="flex gap-3">
+          <div>
             <Link
               href="/"
-              className="text-blue-300 hover:text-blue-100 text-sm flex items-center gap-1.5"
+              className="text-gray-400 hover:text-white text-sm flex items-center gap-1.5"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               <span>Back to Home</span>
@@ -137,8 +134,8 @@ export default function HealthAnalyzer() {
         <div className="max-w-4xl mx-auto">
           {/* Heading */}
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-blue-100 mb-2">Lab Report Analyzer</h1>
-            <p className="text-blue-300 max-w-2xl mx-auto">
+            <h1 className="text-3xl font-bold text-white mb-2">Lab Report Analyzer</h1>
+            <p className="text-gray-400 max-w-2xl mx-auto">
               Upload your lab report or medical test results to get a detailed analysis and insights about what your results mean for your health.
             </p>
           </div>
@@ -147,9 +144,9 @@ export default function HealthAnalyzer() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Left Column - Upload */}
             <div>
-              <div className="bg-gray-900/50 border border-blue-900/30 rounded-lg p-6">
-                <h2 className="text-xl font-semibold text-blue-100 mb-4 flex items-center">
-                  <Microscope className="h-5 w-5 text-blue-400 mr-2" />
+              <div className="bg-black border border-gray-800 rounded-lg p-6">
+                <h2 className="text-xl font-semibold text-white mb-4 flex items-center">
+                  <Microscope className="h-5 w-5 text-gray-400 mr-2" />
                   Upload Lab Report
                 </h2>
                 
@@ -157,7 +154,7 @@ export default function HealthAnalyzer() {
                 <div className="mb-6">
                   <div 
                     className={`border-2 border-dashed rounded-lg p-6 text-center ${
-                      file ? 'border-green-500/50 bg-green-900/10' : 'border-blue-800/50 bg-blue-900/10'
+                      file ? 'border-gray-700 bg-gray-900/20' : 'border-gray-800 bg-gray-900/10'
                     } transition-colors`}
                     onClick={() => fileInputRef.current?.click()}
                   >
@@ -172,13 +169,13 @@ export default function HealthAnalyzer() {
                     
                     {file ? (
                       <div className="flex flex-col items-center">
-                        <FileText className="h-10 w-10 text-green-400 mb-2" />
-                        <p className="text-green-300 font-medium">{fileName}</p>
-                        <p className="text-green-400/70 text-sm mt-1">
+                        <FileText className="h-10 w-10 text-gray-400 mb-2" />
+                        <p className="text-gray-300 font-medium">{fileName}</p>
+                        <p className="text-gray-500 text-sm mt-1">
                           {fileType} • {(fileSize / 1024 / 1024).toFixed(2)} MB
                         </p>
                         <button
-                          className="mt-3 text-sm text-blue-400 hover:text-blue-300"
+                          className="mt-3 text-sm text-gray-400 hover:text-gray-300"
                           onClick={(e) => {
                             e.stopPropagation();
                             resetForm();
@@ -189,9 +186,9 @@ export default function HealthAnalyzer() {
                       </div>
                     ) : (
                       <div className="flex flex-col items-center">
-                        <Upload className="h-10 w-10 text-blue-400 mb-2" />
-                        <p className="text-blue-300 font-medium">Drop your lab report or click to browse</p>
-                        <p className="text-blue-400/70 text-sm mt-1">
+                        <Upload className="h-10 w-10 text-gray-400 mb-2" />
+                        <p className="text-gray-300 font-medium">Drop your lab report or click to browse</p>
+                        <p className="text-gray-500 text-sm mt-1">
                           PDF, JPG, or PNG (Max 20MB)
                         </p>
                       </div>
@@ -199,103 +196,107 @@ export default function HealthAnalyzer() {
                   </div>
                 </div>
                 
-                {/* Optional Message */}
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-blue-200 mb-2">
-                    Additional Context (Optional)
+                {/* Optional message */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Additional context (optional)
                   </label>
                   <Textarea
-                    placeholder="Add any symptoms or specific questions you have about your results..."
-                    className="w-full bg-gray-800/70 border-gray-700 focus:border-blue-500 text-white"
-                    rows={4}
+                    placeholder="Add any additional information about your health situation or specific questions about the lab report..."
                     value={userMessage}
                     onChange={(e) => setUserMessage(e.target.value)}
-                    disabled={isUploading}
+                    className="w-full bg-gray-900 border-gray-800 text-gray-300 placeholder:text-gray-600"
+                    rows={3}
                   />
                 </div>
                 
-                {/* Error Message */}
-                {error && (
-                  <div className="mb-6 p-3 bg-red-900/30 border border-red-800 rounded-md text-red-200 text-sm">
-                    {error}
-                  </div>
-                )}
-                
-                {/* Upload Progress */}
-                {uploadProgress !== null && (
-                  <div className="mb-6">
-                    <div className="flex justify-between text-sm text-blue-300 mb-1">
-                      <span>Analyzing Lab Report</span>
-                      <span>{uploadProgress}%</span>
-                    </div>
-                    <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-blue-500 transition-all duration-300"
-                        style={{ width: `${uploadProgress}%` }}
-                      ></div>
-                    </div>
-                    <p className="text-xs text-blue-400/70 mt-1">
-                      {uploadProgress < 100 
-                        ? "This may take a moment as we analyze your results in detail..." 
-                        : "Analysis complete!"}
-                    </p>
-                  </div>
-                )}
-                
-                {/* Submit Button */}
+                {/* Action buttons */}
                 <Button
-                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium"
                   onClick={analyzeLabReport}
-                  disabled={!file || isUploading}
+                  disabled={isUploading || !file}
+                  className="w-full bg-gray-800 hover:bg-gray-700 text-white"
                 >
                   {isUploading ? (
-                    <>
+                    <div className="flex items-center">
                       <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
                       Analyzing...
-                    </>
+                    </div>
                   ) : (
-                    'Analyze Lab Report'
+                    'Analyze Report'
                   )}
                 </Button>
+                
+                {/* Upload progress */}
+                {uploadProgress !== null && (
+                  <div className="mt-4">
+                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                      <span>Processing</span>
+                      <span>{uploadProgress}%</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-gray-900 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gray-600 transition-all duration-300 ease-out"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+                
+                {/* Errors */}
+                {error && (
+                  <div className="mt-4 p-3 bg-gray-900 border border-red-900/50 rounded text-sm text-gray-300">
+                    <div className="flex gap-2 items-start">
+                      <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-medium">Error</p>
+                        <p>{error}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
               </div>
             </div>
             
-            {/* Right Column - Results */}
+            {/* Right Column - Analysis Results */}
             <div>
-              <div className="bg-gray-900/50 border border-blue-900/30 rounded-lg p-6 h-full">
-                <h2 className="text-xl font-semibold text-blue-100 mb-4 flex items-center">
-                  <Bot className="h-5 w-5 text-blue-400 mr-2" />
-                  Analysis Results
-                </h2>
-                
-                {analysis ? (
-                  <div className="prose prose-invert prose-blue prose-sm max-w-none">
-                    <ReactMarkdown>{analysis}</ReactMarkdown>
+              {analysis ? (
+                <div className="bg-black border border-gray-800 rounded-lg p-6">
+                  <h2 className="text-xl font-semibold text-white mb-4 flex items-center">
+                    <Bot className="h-5 w-5 text-gray-400 mr-2" />
+                    Analysis Results
+                  </h2>
+                  
+                  <div className="prose prose-invert prose-gray prose-sm max-w-none">
+                    <ReactMarkdown>
+                      {analysis}
+                    </ReactMarkdown>
                   </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-64 text-center text-blue-300/70">
-                    <Microscope className="h-12 w-12 text-blue-800/50 mb-3" />
-                    <p className="text-lg font-medium text-blue-300">
-                      Your lab analysis will appear here
-                    </p>
-                    <p className="text-sm max-w-md mt-2">
-                      Upload your lab report and click "Analyze" to get personalized insights and explanations about your health data.
+                  
+                  <div className="mt-6 pt-4 border-t border-gray-800">
+                    <Button
+                      onClick={resetForm}
+                      variant="outline"
+                      className="w-full border-gray-800 bg-gray-900 hover:bg-gray-800 text-gray-300"
+                    >
+                      Start New Analysis
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-black border border-gray-800 rounded-lg p-6 h-full flex items-center justify-center text-center">
+                  <div className="max-w-xs mx-auto">
+                    <div className="mb-4 h-16 w-16 mx-auto rounded-full bg-gray-900 flex items-center justify-center">
+                      <Microscope className="h-8 w-8 text-gray-500" />
+                    </div>
+                    <h3 className="text-lg font-medium text-white mb-2">Analysis Results</h3>
+                    <p className="text-gray-400 text-sm">
+                      Upload a lab report and click "Analyze Report" to get a detailed analysis of your health data.
                     </p>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
-          </div>
-          
-          {/* Instructions/Disclaimer */}
-          <div className="mt-8 p-4 bg-blue-950/30 border border-blue-900/30 rounded-lg text-blue-300/90 text-sm">
-            <h3 className="font-medium text-blue-200 mb-2">Important Notes:</h3>
-            <ul className="list-disc list-inside space-y-1">
-              <li>This analysis is provided for informational purposes only and is not medical advice.</li>
-              <li>Always consult with a healthcare professional about your lab results and health concerns.</li>
-              <li>Your data is processed securely and not stored permanently.</li>
-              <li>For best results, upload clear and complete lab reports in PDF format.</li>
-            </ul>
           </div>
         </div>
       </div>

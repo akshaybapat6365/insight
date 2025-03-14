@@ -1,4 +1,4 @@
-import { genAI, geminiModel } from '@/lib/ai/gemini-provider';
+import { genAI, getGeminiModel, fallbackModel } from '@/lib/ai/gemini-provider';
 import { streamText } from 'ai';
 import { HarmCategory, HarmBlockThreshold, GoogleGenerativeAI } from '@google/generative-ai';
 import fs from 'fs';
@@ -76,7 +76,7 @@ export async function POST(req: Request) {
   const genAIInstance = new GoogleGenerativeAI(apiKey);
 
   // Convert messages to Gemini format
-  const history = messages
+  const formattedHistory = messages
     .slice(0, -1)
     .map((m: { role: string; content: string }) => ({
       role: m.role === 'user' ? 'user' : 'model',
@@ -87,14 +87,17 @@ export async function POST(req: Request) {
 
   // Call the language model
   try {
-    const model = genAIInstance.getGenerativeModel({ model: geminiModel });
+    // Get the current model from config
+    const modelName = getGeminiModel();
+    console.log(`Using Gemini model: ${modelName}`);
+    const model = genAIInstance.getGenerativeModel({ model: modelName });
     
     // Get the current system prompt from config or default
     const currentSystemPrompt = getSystemPrompt();
     
     // Create chat session with system prompt
     const chat = model.startChat({
-      history,
+      history: formattedHistory,
       generationConfig: {
         maxOutputTokens: 1000,
       },
@@ -119,41 +122,102 @@ export async function POST(req: Request) {
       systemInstruction: currentSystemPrompt,
     });
 
-    // Stream the response
-    const streamingResult = await chat.sendMessageStream(lastMessage);
-    
-    const stream = new ReadableStream({
-      async start(controller) {
-        // Handle each chunk from Gemini
-        for await (const chunk of streamingResult.stream) {
-          const text = chunk.text();
-          if (text) {
-            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ text })}\n\n`));
+    try {
+      // Stream the response
+      const streamingResult = await chat.sendMessageStream(lastMessage);
+      
+      const stream = new ReadableStream({
+        async start(controller) {
+          // Handle each chunk from Gemini
+          for await (const chunk of streamingResult.stream) {
+            const text = chunk.text();
+            if (text) {
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ text })}\n\n`));
+            }
           }
-        }
-        controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
-        controller.close();
-      },
-    });
+          controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+          controller.close();
+        },
+      });
 
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
-    });
-  } catch (error) {
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        },
+      });
+    } catch (streamError: any) {
+      console.error('Error streaming from primary model:', streamError);
+      
+      // Try fallback model
+      try {
+        console.log(`Falling back to ${fallbackModel}`);
+        const fallbackModelClient = genAIInstance.getGenerativeModel({ model: fallbackModel });
+        
+        const fallbackChat = fallbackModelClient.startChat({
+          history: formattedHistory,
+          generationConfig: {
+            maxOutputTokens: 1000,
+          },
+          safetySettings: [
+            {
+              category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+              threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+            },
+            {
+              category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+              threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+            },
+            {
+              category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+              threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+            },
+            {
+              category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+              threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+            },
+          ],
+          systemInstruction: currentSystemPrompt,
+        });
+        
+        const fallbackResult = await fallbackChat.sendMessageStream(lastMessage);
+        
+        const fallbackStream = new ReadableStream({
+          async start(controller) {
+            // Handle each chunk from Gemini
+            for await (const chunk of fallbackResult.stream) {
+              const text = chunk.text();
+              if (text) {
+                controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ text })}\n\n`));
+              }
+            }
+            controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+            controller.close();
+          },
+        });
+
+        return new Response(fallbackStream, {
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+          },
+        });
+      } catch (fallbackError: any) {
+        console.error('Fallback model also failed:', fallbackError);
+        throw new Error(`Both primary and fallback models failed: ${streamError.message}`);
+      }
+    }
+  } catch (error: any) {
     console.error('Error calling Gemini API:', error);
     let errorMessage = 'Error calling Gemini API';
     
     // Provide more specific error messages for common issues
-    if (error instanceof Error) {
-      if (error.message.includes('API key')) {
-        errorMessage = 'Invalid or missing Gemini API key';
-      } else if (error.message.includes('quota')) {
-        errorMessage = 'Gemini API quota exceeded';
-      }
+    if (error.message.includes('API key')) {
+      errorMessage = 'Invalid or missing Gemini API key';
+    } else if (error.message.includes('quota')) {
+      errorMessage = 'Gemini API quota exceeded';
     }
     
     return new Response(JSON.stringify({ error: errorMessage }), {

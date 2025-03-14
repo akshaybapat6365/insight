@@ -134,25 +134,25 @@ export function FileUpload({ onFileProcessed }: { onFileProcessed: (text: string
   }
 
   return (
-    <div className="w-full border border-blue-900/30 bg-gray-800/60 rounded-lg p-5">
+    <div className="w-full border border-gray-800 bg-black rounded-lg p-5">
       <div className="flex flex-col items-center text-center">
         <div className="mb-4">
           {isUploading ? (
-            <div className="h-12 w-12 rounded-full bg-blue-900/40 flex items-center justify-center animate-pulse">
-              <RefreshCw className="h-6 w-6 text-blue-400 animate-spin" />
+            <div className="h-12 w-12 rounded-full bg-gray-900 flex items-center justify-center animate-pulse">
+              <RefreshCw className="h-6 w-6 text-gray-400 animate-spin" />
             </div>
           ) : (
-            <div className="h-12 w-12 rounded-full bg-blue-900/40 flex items-center justify-center">
-              <Upload className="h-6 w-6 text-blue-400" />
+            <div className="h-12 w-12 rounded-full bg-gray-900 flex items-center justify-center">
+              <Upload className="h-6 w-6 text-gray-400" />
             </div>
           )}
         </div>
         
-        <h3 className="text-lg font-medium text-blue-100 mb-2">
+        <h3 className="text-lg font-medium text-white mb-2">
           {isUploading ? 'Processing File...' : 'Upload Health Data'}
         </h3>
         
-        <p className="text-sm text-blue-300/80 mb-4">
+        <p className="text-sm text-gray-400 mb-4">
           {isUploading 
             ? 'Extracting health information from your file...' 
             : 'Upload a lab report, bloodwork PDF, or scan of your health data'}
@@ -160,17 +160,17 @@ export function FileUpload({ onFileProcessed }: { onFileProcessed: (text: string
         
         {/* Progress bar for upload */}
         {uploadProgress !== null && (
-          <div className="w-full h-2 bg-gray-700 rounded-full mb-4 overflow-hidden">
+          <div className="w-full h-2 bg-gray-900 rounded-full mb-4 overflow-hidden">
             <div 
-              className="h-full bg-blue-500 rounded-full transition-all duration-300 ease-out"
+              className="h-full bg-gray-600 rounded-full transition-all duration-300 ease-out"
               style={{ width: `${uploadProgress}%` }}
             ></div>
           </div>
         )}
         
         {error && (
-          <div className="mb-4 p-3 bg-red-900/40 border border-red-800/50 rounded-md text-sm text-red-200 flex items-start gap-2 w-full">
-            <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+          <div className="mb-4 p-3 bg-gray-900 border border-red-900/50 rounded-md text-sm text-gray-300 flex items-start gap-2 w-full">
+            <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
             <div>
               <p className="font-medium">Error</p>
               <p>{error}</p>
@@ -180,7 +180,7 @@ export function FileUpload({ onFileProcessed }: { onFileProcessed: (text: string
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="mt-2 border-red-700/50 bg-red-900/30 hover:bg-red-800/50 text-red-200"
+                className="mt-2 border-gray-700 bg-gray-800 hover:bg-gray-700 text-gray-300"
                 onClick={resetUpload}
               >
                 Try Again
@@ -190,8 +190,8 @@ export function FileUpload({ onFileProcessed }: { onFileProcessed: (text: string
         )}
         
         {fileInfo && !error && !isUploading && (
-          <div className="mb-4 p-3 bg-green-900/30 border border-green-800/40 rounded-md text-sm text-green-200 flex items-start gap-2 w-full">
-            <FileCheck className="h-5 w-5 text-green-400 flex-shrink-0 mt-0.5" />
+          <div className="mb-4 p-3 bg-gray-900 border border-gray-800 rounded-md text-sm text-gray-300 flex items-start gap-2 w-full">
+            <FileCheck className="h-5 w-5 text-gray-400 flex-shrink-0 mt-0.5" />
             <div>
               <p className="font-medium">File Processed Successfully</p>
               <p className="text-xs mt-1">{fileInfo.name} • {(fileInfo.size / 1024).toFixed(1)} KB</p>
@@ -209,14 +209,14 @@ export function FileUpload({ onFileProcessed }: { onFileProcessed: (text: string
               accept=".pdf,.jpg,.jpeg,.png,.xls,.xlsx,.csv"
               disabled={isUploading}
             />
-            <div className={`w-full flex items-center justify-center px-4 py-2 rounded-md border ${isUploading ? 'bg-blue-900/30 border-blue-700/50 cursor-not-allowed' : 'bg-blue-900/20 border-blue-800/30 hover:bg-blue-800/30 cursor-pointer'}`}>
-              <FileText className="h-5 w-5 mr-2 text-blue-400" />
-              <span className="text-sm">
+            <div className={`w-full flex items-center justify-center px-4 py-2 rounded-md border ${isUploading ? 'bg-gray-900 border-gray-700 cursor-not-allowed' : 'bg-gray-900 border-gray-800 hover:bg-gray-800 cursor-pointer'}`}>
+              <FileText className="h-5 w-5 mr-2 text-gray-400" />
+              <span className="text-sm text-gray-300">
                 {isUploading ? 'Processing...' : 'Choose File'}
               </span>
             </div>
           </label>
-          <p className="text-xs text-gray-500 mt-2 text-center">
+          <p className="text-xs text-gray-600 mt-2 text-center">
             Supports PDF, JPEG, PNG, Excel/CSV • Max 10MB
           </p>
         </div>
