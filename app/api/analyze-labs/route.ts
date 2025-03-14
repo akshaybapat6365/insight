@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { loadConfig } from '@/lib/config';
 
 // Configuration for the lab analysis API
@@ -79,101 +79,47 @@ export async function POST(request: Request) {
       );
     }
     
-    // Use the experimental model specified in the Python code
-    const modelName = "gemini-2.0-flash-thinking-exp-01-21";
+    // Configure AI settings
+    const shouldUseFallback = appConfig.fallbackModel ? true : false;
+    const modelName = "gemini-2.0-pro-exp-02-05"; // Updated to use Gemini 2.0 Pro Experimental
     console.log(`Using model: ${modelName} for lab analysis`);
     
-    // Initialize Google AI
+    // Initialize the Gemini API client
     let genAI;
-    try {
-      genAI = new GoogleGenerativeAI(apiKey);
-    } catch (error: any) {
-      console.error('Error initializing Gemini AI:', error);
-      return NextResponse.json(
-        { error: 'Failed to initialize Gemini AI: ' + (error.message || 'Unknown error') },
-        { status: 500 }
-      );
-    }
-    
-    // Get the model
     let model;
-    try {
-      model = genAI.getGenerativeModel({ 
-        model: modelName,
-        generationConfig: {
-          temperature: 0.7,
-          topP: 0.95,
-          topK: 64,
-          maxOutputTokens: 65536,
-        },
-        systemInstruction: SYSTEM_PROMPT,
-      });
-    } catch (modelError: any) {
-      console.error('Error getting Gemini model:', modelError);
-      return NextResponse.json(
-        { error: 'Could not access the Gemini model for lab analysis.' },
-        { status: 500 }
-      );
-    }
     
-    // Convert file to base64
     try {
-      const bytes = await file.arrayBuffer();
-      const blob = new Blob([bytes], { type: file.type });
-      const base64Data = await blobToBase64(blob);
+      genAI = new GoogleGenAI({
+        apiKey: apiKey
+      });
       
-      // Create specialized prompt for lab reports
-      const labPrompt = "I'm uploading my lab report and would like you to analyze it. " + userMessage;
-      
-      console.log('Sending lab report to Gemini API...');
-      
-      // Use structured format similar to Python implementation
-      let result;
-      try {
-        result = await model.generateContent({
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { text: labPrompt },
-                { inlineData: { data: base64Data, mimeType: file.type } }
-              ]
-            }
-          ]
-        });
-        
-        console.log('Received response from Gemini API');
-        const responseText = result.response.text();
-        
-        return NextResponse.json({ 
-          success: true,
-          analysis: responseText,
-          filename: file.name,
-          fileType: file.type,
-        });
-      } catch (generationError: any) {
-        console.error('Error generating content:', generationError);
-        
-        // Detailed error for debugging
-        const errorDetails = {
-          message: generationError.message || 'Unknown error during content generation',
-          code: generationError.code,
-          status: generationError.status,
-          details: generationError.details || {}
-        };
-        
-        return NextResponse.json(
-          { 
-            error: 'Failed to analyze lab report: ' + errorDetails.message,
-            errorDetails
-          },
-          { status: 500 }
-        );
-      }
-    } catch (fileProcessingError: any) {
-      console.error('Error processing file data:', fileProcessingError);
+      // Generate response with Gemini
+      const result = await genAI.models.generateContent({
+        model: modelName,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: SYSTEM_PROMPT },
+              { text: "User message: " + userMessage },
+              { text: "Lab report contents: " + file.name }
+            ]
+          }
+        ]
+      });
+
+      // Return the analysis result
+      return NextResponse.json({ 
+        result: result.text,
+        model: modelName
+      });
+    } catch (error: any) {
+      console.error('Error processing file:', error);
       return NextResponse.json(
-        { error: 'Error processing lab report: ' + (fileProcessingError.message || 'Unknown error') },
+        { 
+          error: error.message || 'An error occurred during file processing',
+          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        },
         { status: 500 }
       );
     }

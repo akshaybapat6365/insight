@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleGenAI } from '@google/genai'
 import { loadConfig } from '@/lib/config'
 
 export const config = {
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     }
     
     // Get model configuration from the config
-    const primaryModelName = "gemini-2.0-flash-thinking-exp-01-21"
+    const primaryModelName = "gemini-2.0-pro-exp-02-05"
     const fallbackModelName = appConfig.fallbackModel || "gemini-1.5-pro"
     const shouldUseFallback = appConfig.useFallback !== undefined ? appConfig.useFallback : true
     const maxOutputTokens = appConfig.maxOutputTokens || 4096
@@ -56,37 +56,105 @@ export async function POST(request: Request) {
     console.log(`Fallback enabled: ${shouldUseFallback}, fallback model: ${fallbackModelName}`)
     console.log(`Max output tokens: ${maxOutputTokens}`)
     
-    // Initialize Google AI
+    // Create extraction prompt based on file type
+    let extractionPrompt = "This is a lab report. Extract all text from this document that appears to be related to medical test results or health data. Format it clearly with test names, values, and reference ranges if present."
+    
+    if (file.type.includes('image')) {
+      extractionPrompt = "This is a medical image or document. Extract all visible text and data, especially test results, values, and reference ranges if present."
+    } else if (file.type.includes('pdf')) {
+      extractionPrompt = "This is a PDF medical document. Extract all text with special focus on lab results, biomarkers, test values, and their reference ranges. Format the data in a clean, readable way with clear labels for each test and value."
+    }
+    
+    // Initialize the Gemini API client
     let genAI;
+    let model;
     try {
-      genAI = new GoogleGenerativeAI(apiKey)
+      genAI = new GoogleGenAI({
+        apiKey: apiKey
+      });
     } catch (error: any) {
-      console.error('Error initializing Gemini AI:', error)
+      console.error('Error initializing Gemini AI:', error);
       return NextResponse.json(
         { error: 'Failed to initialize Gemini AI: ' + (error.message || 'Unknown error') },
         { status: 500 }
-      )
+      );
     }
     
-    // Try to use the primary model, with fallback options
-    let model;
+    // Try to use the primary model first
+    let result;
     try {
-      // First try the experimental model
-      model = genAI.getGenerativeModel({ model: primaryModelName })
-    } catch (modelError: any) {
-      console.warn(`Failed to use ${primaryModelName}:`, modelError.message)
+      console.log(`Attempting to use model: ${primaryModelName}`)
       
-      if (!shouldUseFallback) {
-        return NextResponse.json(
-          { error: `Could not access the primary Gemini model (${primaryModelName}) and fallback is disabled.` },
-          { status: 500 }
-        )
+      // Convert file to base64
+      const bytes = await file.arrayBuffer();
+      const base64Data = Buffer.from(bytes).toString('base64');
+      const mimeType = file.type;
+      
+      result = await genAI.models.generateContent({
+        model: primaryModelName,
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: extractionPrompt },
+              { inlineData: { mimeType: mimeType, data: base64Data } }
+            ]
+          }
+        ]
+      });
+      
+      return NextResponse.json({
+        analysis: result.text,
+        model: primaryModelName
+      });
+    } catch (generationError: any) {
+      console.error('Error generating content:', generationError)
+      
+      // Detailed error for debugging
+      const errorDetails = {
+        message: generationError.message || 'Unknown error during content generation',
+        code: generationError.code,
+        status: generationError.status,
+        details: generationError.details || {}
       }
       
+      return NextResponse.json(
+        { 
+          error: 'Failed to process file with AI model: ' + errorDetails.message,
+          errorDetails
+        },
+        { status: 500 }
+      )
+    }
+
+    // If enabled, try to use the fallback model
+    if (shouldUseFallback) {
       try {
-        // Fall back to standard Gemini model
         console.log(`Attempting fallback to ${fallbackModelName}`)
-        model = genAI.getGenerativeModel({ model: fallbackModelName })
+        
+        // Convert file to base64
+        const bytes = await file.arrayBuffer();
+        const base64Data = Buffer.from(bytes).toString('base64');
+        const mimeType = file.type;
+        
+        result = await genAI.models.generateContent({
+          model: fallbackModelName,
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                { text: extractionPrompt },
+                { inlineData: { mimeType: mimeType, data: base64Data } }
+              ]
+            }
+          ]
+        });
+        
+        return NextResponse.json({
+          analysis: result.text,
+          model: fallbackModelName,
+          fallback: true
+        });
       } catch (fallbackError: any) {
         console.error('Error creating fallback Gemini model:', fallbackError)
         return NextResponse.json(
@@ -94,80 +162,6 @@ export async function POST(request: Request) {
           { status: 500 }
         )
       }
-    }
-    
-    // Convert file to base64
-    try {
-      const bytes = await file.arrayBuffer()
-      const blob = new Blob([bytes], { type: file.type })
-      const base64Data = await blobToBase64(blob)
-      
-      // Create extraction prompt based on file type
-      let extractionPrompt = "This is a lab report. Extract all text from this document that appears to be related to medical test results or health data. Format it clearly with test names, values, and reference ranges if present."
-      
-      if (file.type.includes('image')) {
-        extractionPrompt = "This is a medical image or document. Extract all visible text and data, especially test results, values, and reference ranges if present."
-      } else if (file.type.includes('pdf')) {
-        extractionPrompt = "This is a PDF medical document. Extract all text with special focus on lab results, biomarkers, test values, and their reference ranges. Format the data in a clean, readable way with clear labels for each test and value."
-      }
-      
-      console.log('Sending request to Gemini API with prompt length:', extractionPrompt.length)
-      
-      // Use structured format similar to Python implementation
-      let result;
-      try {
-        result = await model.generateContent({
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { text: extractionPrompt },
-                { inlineData: { data: base64Data, mimeType: file.type } }
-              ]
-            }
-          ],
-          generationConfig: {
-            temperature: 0.2,  // Lower temperature for more factual extraction
-            topP: 0.95,
-            topK: 64,
-            maxOutputTokens: maxOutputTokens,
-          }
-        })
-        
-        console.log('Received response from Gemini API')
-        const extractedText = result.response.text()
-        
-        return NextResponse.json({ 
-          success: true,
-          text: extractedText,
-          filename: file.name,
-          fileType: file.type,
-        })
-      } catch (generationError: any) {
-        console.error('Error generating content:', generationError)
-        
-        // Detailed error for debugging
-        const errorDetails = {
-          message: generationError.message || 'Unknown error during content generation',
-          code: generationError.code,
-          status: generationError.status,
-          details: generationError.details || {}
-        }
-        
-        return NextResponse.json(
-          { 
-            error: 'Failed to process file with AI model: ' + errorDetails.message,
-            errorDetails
-          },
-          { status: 500 }
-        )
-      }
-    } catch (fileProcessingError: any) {
-      console.error('Error processing file data:', fileProcessingError)
-      return NextResponse.json(
-        { error: 'Error processing file data: ' + (fileProcessingError.message || 'Unknown error') },
-        { status: 500 }
-      )
     }
   } catch (error: any) {
     console.error('Error processing file:', error)
