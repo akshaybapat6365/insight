@@ -31,14 +31,13 @@ export default function Chat() {
   // Add this near the top of the component
   console.log('Admin key from env:', process.env.NEXT_PUBLIC_ADMIN_KEY || 'not set');
   
-  // Using a fixed admin password for simplicity
-  // In production, you should use a more secure method
-  const adminPassword = 'adminpass'; // Use the same value you set in Vercel
+  // Hardcoded admin password for reliable access
+  const adminPassword = 'adminpass'; // IMPORTANT: This must match value in middleware.ts
   console.log('Using admin password:', adminPassword);
   
-  // Create an explicit admin URL with the key parameter
+  // Admin URL with password parameter
   const adminUrl = `/admin?key=${adminPassword}`;
-  console.log('Admin URL (direct link):', adminUrl);
+  console.log('Admin URL:', adminUrl);
 
   // Handler for when a file is processed
   const handleFileProcessed = (text: string) => {
@@ -72,17 +71,14 @@ export default function Chat() {
             </div>
             <h1 className="text-lg font-medium text-blue-100">Health Insights AI</h1>
           </div>
-          {/* Debug the link issue by trying both Link and regular anchor */}
-          <div className="flex gap-2">
-            {/* Regular anchor tag for direct navigation */}
-            <a 
-              href={adminUrl}
-              className="text-blue-300 hover:text-blue-100 text-sm underline"
-              onClick={() => console.log('Admin link clicked (anchor tag)')}
-            >
-              Admin Console
-            </a>
-          </div>
+          <a 
+            href={adminUrl}
+            className="text-blue-300 hover:text-blue-100 text-sm flex items-center gap-1.5"
+            onClick={() => console.log('Admin link clicked')}
+          >
+            <User className="h-3.5 w-3.5" />
+            <span>Admin Console</span>
+          </a>
         </div>
       </header>
       
