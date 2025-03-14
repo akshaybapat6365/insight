@@ -71,14 +71,22 @@ export default function Chat() {
             </div>
             <h1 className="text-lg font-medium text-blue-100">Health Insights AI</h1>
           </div>
-          <a 
-            href={adminUrl}
-            className="text-blue-300 hover:text-blue-100 text-sm flex items-center gap-1.5"
-            onClick={() => console.log('Admin link clicked')}
-          >
-            <User className="h-3.5 w-3.5" />
-            <span>Admin Console</span>
-          </a>
+          <div className="flex gap-3">
+            <a 
+              href={adminUrl}
+              className="text-blue-300 hover:text-blue-100 text-sm flex items-center gap-1.5"
+              onClick={() => console.log('Admin link clicked')}
+            >
+              <User className="h-3.5 w-3.5" />
+              <span>Admin Console</span>
+            </a>
+            <a
+              href="/admin-link-test"
+              className="text-green-300 hover:text-green-100 text-sm flex items-center gap-1.5"
+            >
+              <span>Admin Access Test</span>
+            </a>
+          </div>
         </div>
       </header>
       
