@@ -11,6 +11,9 @@ interface AppConfig {
 
 const CONFIG_FILE_PATH = path.join(process.cwd(), 'config.json');
 
+// Check if we're running on Vercel (production)
+const isVercel = !!process.env.VERCEL;
+
 /**
  * Load configuration from file system and environment variables
  * Priority: Environment variables > config.json > defaults
@@ -18,18 +21,20 @@ const CONFIG_FILE_PATH = path.join(process.cwd(), 'config.json');
 export function loadConfig(): AppConfig {
   let fileConfig: AppConfig = {};
   
-  // Try to load from config file
-  try {
-    if (fs.existsSync(CONFIG_FILE_PATH)) {
-      const rawData = fs.readFileSync(CONFIG_FILE_PATH, 'utf8');
-      fileConfig = JSON.parse(rawData);
-      console.log('Config loaded from file:', Object.keys(fileConfig).join(', '));
-    } else {
-      console.log('No config.json file found');
+  // Only try to load from config file if not on Vercel
+  if (!isVercel) {
+    try {
+      if (fs.existsSync(CONFIG_FILE_PATH)) {
+        const rawData = fs.readFileSync(CONFIG_FILE_PATH, 'utf8');
+        fileConfig = JSON.parse(rawData);
+        console.log('Config loaded from file:', Object.keys(fileConfig).join(', '));
+      } else {
+        console.log('No config.json file found');
+      }
+    } catch (error) {
+      console.error('Error loading config file:', error);
+      // Continue with empty config
     }
-  } catch (error) {
-    console.error('Error loading config file:', error);
-    // Continue with empty config
   }
   
   // Create merged config with environment variables taking precedence
@@ -61,7 +66,33 @@ export function loadConfig(): AppConfig {
  */
 export async function saveConfig(newConfig: Partial<AppConfig>): Promise<{success: boolean, message: string}> {
   try {
-    // Merge with existing config or create new if doesn't exist
+    // If on Vercel, only update environment variables for current instance
+    // but don't try to write to filesystem
+    if (isVercel) {
+      // Update environment variables for current instance only
+      if (newConfig.systemPrompt) {
+        process.env.SYSTEM_PROMPT = newConfig.systemPrompt;
+      }
+      
+      if (newConfig.apiKey) {
+        process.env.GEMINI_API_KEY = newConfig.apiKey;
+      }
+      
+      if (newConfig.fallbackModel) {
+        process.env.DEFAULT_GEMINI_MODEL = newConfig.fallbackModel;
+      }
+      
+      if (newConfig.useFallback !== undefined) {
+        process.env.USE_FALLBACK_MODEL = newConfig.useFallback ? 'true' : 'false';
+      }
+      
+      return {
+        success: true,
+        message: 'Configuration applied to current instance. Note: On Vercel, changes will only persist until the serverless function restarts. For permanent changes, set environment variables in the Vercel dashboard.'
+      };
+    }
+    
+    // For local development, merge with existing config and save to file
     let existingConfig: AppConfig = {};
     try {
       if (fs.existsSync(CONFIG_FILE_PATH)) {
@@ -103,7 +134,7 @@ export async function saveConfig(newConfig: Partial<AppConfig>): Promise<{succes
       
       return {
         success: true,
-        message: 'Configuration saved successfully and applied to the current instance. Note: In serverless environments, you may need to set these in your environment variables for persistence.'
+        message: 'Configuration saved successfully and applied to the current instance.'
       };
     } catch (writeError) {
       console.error('Error writing config file:', writeError);
@@ -133,7 +164,7 @@ export function getEnvironmentInfo() {
     hasGeminiApiKey: !!process.env.GEMINI_API_KEY,
     hasSystemPrompt: !!process.env.SYSTEM_PROMPT,
     hasAdminPassword: !!process.env.ADMIN_PASSWORD,
-    hasConfigFile: fs.existsSync(CONFIG_FILE_PATH),
+    hasConfigFile: !isVercel && fs.existsSync(CONFIG_FILE_PATH),
     serverPid: process.pid,
     configPath: CONFIG_FILE_PATH,
   };
