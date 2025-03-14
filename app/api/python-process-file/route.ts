@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleGenAI } from '@google/genai'
+import { getGeminiModel, fallbackModel } from '@/lib/ai/gemini-provider'
 
 export const config = {
   api: {
@@ -10,7 +11,7 @@ export const config = {
 
 export async function POST(request: Request) {
   try {
-    console.log('Python-style PDF processing endpoint called');
+    console.log('Python-style file processing endpoint called');
     
     const formData = await request.formData()
     const file = formData.get('file') as File
@@ -36,52 +37,97 @@ export async function POST(request: Request) {
     
     console.log('API Key exists, length:', apiKey.length);
     
-    // Initialize Gemini API with the specific model from Python code
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ 
-      model: 'gemini-2.0-flash-thinking-exp-01-21'  // Exactly match the model in Python code
+    // Initialize Gemini API with the specific model
+    const genAI = new GoogleGenAI({
+      apiKey: apiKey
     });
+    
+    const modelName = getGeminiModel();
+    console.log('Using model:', modelName);
     
     // Convert file to base64
     const bytes = await file.arrayBuffer();
-    const blob = new Blob([bytes], { type: file.type });
-    const base64Data = await blobToBase64(blob);
+    const base64Data = Buffer.from(bytes).toString('base64');
     
     console.log('File converted to base64, length:', base64Data.length);
     
-    // Use the identical prompt as in the Python code
-    const extractionPrompt = "This is a lab report. Extract all text from this document that appears to be related to medical test results or health data. Format it clearly with test names, values, and reference ranges if present.";
+    // Use an extraction prompt based on file type
+    let extractionPrompt = "This is a lab report. Extract all text from this document that appears to be related to medical test results or health data. Format it clearly with test names, values, and reference ranges if present.";
     
-    console.log('Sending request to Gemini API with model:', 'gemini-2.0-flash-thinking-exp-01-21');
+    if (file.type.includes('image')) {
+      extractionPrompt = "This is a medical image or document. Extract all visible text and data, especially test results, values, and reference ranges if present.";
+    } else if (file.type.includes('pdf')) {
+      extractionPrompt = "This is a PDF medical document. Extract all text with special focus on lab results, biomarkers, test values, and their reference ranges. Format the data in a clean, readable way with clear labels for each test and value.";
+    }
     
-    // Use the exact format from the Python implementation
-    const result = await model.generateContent({
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: extractionPrompt },
-            { inlineData: { data: base64Data, mimeType: file.type } }
+    console.log('Sending request to Gemini API with model:', modelName);
+    
+    try {
+      // Use the new SDK format to generate content
+      const result = await genAI.models.generateContent({
+        model: modelName,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: extractionPrompt },
+              { inlineData: { mimeType: file.type, data: base64Data } }
+            ]
+          }
+        ]
+      });
+      
+      console.log('Received response from Gemini API');
+      const extractedText = result.text;
+      
+      return NextResponse.json({ 
+        success: true,
+        text: extractedText,
+        filename: file.name,
+        fileType: file.type,
+      });
+    } catch (genError: any) {
+      console.error('Error generating content with primary model:', genError);
+      
+      // Try with fallback model
+      try {
+        console.log(`Attempting fallback to ${fallbackModel}`);
+        
+        const fallbackResult = await genAI.models.generateContent({
+          model: fallbackModel,
+          contents: [
+            {
+              role: "user",
+              parts: [
+                { text: extractionPrompt },
+                { inlineData: { mimeType: file.type, data: base64Data } }
+              ]
+            }
           ]
-        }
-      ],
-      generationConfig: {
-        temperature: 0.7,
-        topP: 0.95,
-        topK: 64,
-        maxOutputTokens: 8192,
+        });
+        
+        console.log('Received response from fallback model');
+        const extractedText = fallbackResult.text;
+        
+        return NextResponse.json({ 
+          success: true,
+          text: extractedText,
+          filename: file.name,
+          fileType: file.type,
+          fallback: true
+        });
+      } catch (fallbackError: any) {
+        console.error('Error with fallback model:', fallbackError);
+        return NextResponse.json(
+          { 
+            error: 'Failed to process file with both primary and fallback models',
+            details: genError.message,
+            fallbackError: fallbackError.message 
+          },
+          { status: 500 }
+        );
       }
-    });
-    
-    console.log('Received response from Gemini API');
-    const extractedText = result.response.text();
-    
-    return NextResponse.json({ 
-      success: true,
-      text: extractedText,
-      filename: file.name,
-      fileType: file.type,
-    });
+    }
   } catch (error: any) {
     console.error('Error processing file:', error);
     console.error('Error stack:', error.stack);
