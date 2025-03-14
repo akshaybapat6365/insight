@@ -6,18 +6,22 @@ import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card'
 import Link from 'next/link'
-import { HeartPulse, ArrowLeft, Settings, Bug, AlertTriangle, CheckCircle, Info } from 'lucide-react'
+import { HeartPulse, ArrowLeft, Settings, Bug, AlertTriangle, CheckCircle, Info, RefreshCw, Server } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 
 // Component that uses search params
 function AdminContent() {
   const [systemPrompt, setSystemPrompt] = useState('')
   const [apiKey, setApiKey] = useState('')
+  const [fallbackModel, setFallbackModel] = useState('gemini-1.5-pro')
+  const [useFallback, setUseFallback] = useState(true)
+  const [maxOutputTokens, setMaxOutputTokens] = useState('1000')
   const [message, setMessage] = useState('')
   const [errorDetails, setErrorDetails] = useState('')
   const [loading, setLoading] = useState(false)
   const [debugInfo, setDebugInfo] = useState<any>(null)
   const [showVercelInfo, setShowVercelInfo] = useState(false)
+  const [configSaved, setConfigSaved] = useState(false)
   
   // Get the search params to display the key (masked)
   const searchParams = useSearchParams()
@@ -36,9 +40,24 @@ function AdminContent() {
       })
   }, [])
 
-  useEffect(() => {
-    // Load the current system prompt
-    setLoading(true)
+  // Function to refresh config and debug info
+  const refreshData = () => {
+    setLoading(true);
+    setMessage('');
+    setErrorDetails('');
+    
+    // Refresh debug info
+    fetch('/api/admin-debug')
+      .then(res => res.json())
+      .then(data => {
+        setDebugInfo(data)
+        console.log('Admin debug info refreshed:', data)
+      })
+      .catch(err => {
+        console.error('Failed to refresh debug info:', err)
+      });
+    
+    // Load the current configuration
     fetch('/api/admin/config')
       .then(res => {
         if (!res.ok) {
@@ -49,8 +68,12 @@ function AdminContent() {
       .then(data => {
         console.log('Loaded config:', data)
         setSystemPrompt(data.systemPrompt || '')
-        setMessage('')
+        setFallbackModel(data.fallbackModel || 'gemini-1.5-pro')
+        setUseFallback(data.useFallback !== undefined ? data.useFallback : true)
+        setMaxOutputTokens(data.maxOutputTokens?.toString() || '1000')
+        setMessage('Configuration refreshed successfully')
         setErrorDetails('')
+        setConfigSaved(false)
       })
       .catch(err => {
         console.error('Failed to load config:', err)
@@ -60,23 +83,43 @@ function AdminContent() {
       .finally(() => {
         setLoading(false)
       })
-  }, [])
+  };
+
+  useEffect(() => {
+    // Load the current system prompt on initial load
+    refreshData();
+  }, []);
 
   const saveConfig = async () => {
     setLoading(true)
     setMessage('')
     setErrorDetails('')
+    setConfigSaved(false)
     
     try {
       console.log('Saving config with system prompt length:', systemPrompt.length)
       
+      const payload: any = { 
+        systemPrompt,
+        fallbackModel,
+        useFallback,
+        maxOutputTokens: parseInt(maxOutputTokens, 10)
+      };
+      
+      // Only include API key if it was provided
+      if (apiKey) {
+        payload.apiKey = apiKey;
+      }
+      
+      console.log('Saving configuration with payload:', { 
+        ...payload, 
+        apiKey: apiKey ? '[API KEY PROVIDED]' : '[NO API KEY PROVIDED]' 
+      });
+      
       const res = await fetch('/api/admin/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          systemPrompt,
-          apiKey: apiKey || undefined // Only send if changed
-        })
+        body: JSON.stringify(payload)
       })
       
       const data = await res.json()
@@ -85,6 +128,15 @@ function AdminContent() {
         setMessage(data.message || 'Configuration saved successfully!')
         setApiKey('') // Clear API key field after saving
         setShowVercelInfo(true) // Show Vercel info when saving succeeds
+        setConfigSaved(true)
+        
+        // Update debug info after saving
+        if (data.environmentInfo) {
+          setDebugInfo((prev: any) => ({
+            ...prev,
+            ...data.environmentInfo
+          }));
+        }
       } else {
         console.error('API error response:', data)
         setMessage(`Failed to save configuration: ${data.error || 'Unknown error'}`)
@@ -100,182 +152,269 @@ function AdminContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-950 to-blue-950 py-8">
-      <div className="container max-w-2xl">
-        <div className="mb-6 flex items-center gap-2">
+    <div className="container py-8">
+      <div className="mb-8 flex items-center justify-between">
+        <div className="flex items-center gap-2">
           <Link 
-            href="/" 
-            className="flex items-center gap-2 text-blue-300 hover:text-blue-100 transition-colors"
+            href={`/?key=${keyParam || ''}`} 
+            className="text-blue-500 hover:text-blue-400 flex items-center gap-1"
           >
             <ArrowLeft className="h-4 w-4" />
-            <span>Back to chat</span>
+            <span>Back to app</span>
           </Link>
+          <h1 className="text-xl font-semibold">Admin Console</h1>
         </div>
         
-        <div className="flex items-center gap-3 mb-6">
-          <div className="h-10 w-10 rounded-full bg-blue-600 flex items-center justify-center">
-            <HeartPulse className="h-6 w-6 text-white" />
-          </div>
-          <h1 className="text-2xl font-semibold text-blue-100">Health Insights Admin</h1>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={refreshData}
+            disabled={loading}
+          >
+            <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
         </div>
-        
-        {/* Vercel Environment Variables Info */}
-        {showVercelInfo && (
-          <Card className="border border-blue-900/30 bg-blue-900/10 backdrop-blur-sm mb-6">
-            <CardHeader className="border-b border-blue-900/20 pb-3">
-              <CardTitle className="flex items-center gap-2 text-xl text-blue-100">
-                <Info className="h-5 w-5 text-blue-400" />
-                Vercel Environment Variables
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 pt-4">
-              <p className="text-blue-100">
-                When deploying to Vercel, configuration changes must be made through the Vercel dashboard:
-              </p>
-              <ol className="list-decimal list-inside space-y-2 text-blue-200">
-                <li>Go to your Vercel project dashboard</li>
-                <li>Navigate to "Settings" → "Environment Variables"</li>
-                <li>Add or update the following variables:
-                  <ul className="ml-6 mt-1 list-disc text-sm text-blue-300">
-                    <li><code className="bg-blue-950/50 px-1.5 py-0.5 rounded">SYSTEM_PROMPT</code> - Your AI system instructions</li>
-                    <li><code className="bg-blue-950/50 px-1.5 py-0.5 rounded">GEMINI_API_KEY</code> - Your Gemini API key</li>
-                  </ul>
-                </li>
-                <li>Save changes and redeploy your application</li>
-              </ol>
-              <div className="bg-blue-950/30 p-3 rounded text-sm text-blue-200 mt-2">
-                <p className="font-medium">Note:</p>
-                <p>Any changes made here are logged but not permanently saved on Vercel's serverless platform.</p>
+      </div>
+      
+      {/* System Status */}
+      <Card className="mb-8 bg-gray-900/50 border-gray-800">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Server className="h-5 w-5 text-blue-400" />
+            System Status
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {debugInfo ? (
+            <div className="text-sm grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p><strong>Environment:</strong> {debugInfo.nodeEnv}</p>
+                <p><strong>Running on Vercel:</strong> {debugInfo.isVercel ? 'Yes' : 'No'}</p>
+                <p><strong>Server PID:</strong> {debugInfo.serverPid}</p>
+                <p><strong>API Key Configured:</strong> {debugInfo.hasGeminiApiKey ? 'Yes' : 'No'}</p>
+                <p><strong>System Prompt Set:</strong> {debugInfo.hasSystemPrompt ? 'Yes' : 'No'}</p>
               </div>
-            </CardContent>
-          </Card>
-        )}
-        
-        {/* Debug Card */}
-        <Card className="border border-yellow-900/30 bg-yellow-900/10 backdrop-blur-sm mb-6">
-          <CardHeader className="border-b border-yellow-900/20 pb-3">
-            <CardTitle className="flex items-center gap-2 text-xl text-yellow-100">
-              <Bug className="h-5 w-5 text-yellow-400" />
-              Debug Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-4">
-            <div>
-              <h3 className="text-sm font-medium text-yellow-200 mb-2">Access Parameters</h3>
-              <div className="bg-gray-900/50 p-3 rounded text-xs font-mono">
-                <p>URL key parameter: {keyParam ? '✅ Present' : '❌ Missing'}</p>
-                {keyParam && <p>Key parameter value: {keyParam.substring(0, 2)}{'*'.repeat(Math.max(0, keyParam.length - 4))}{keyParam.substring(keyParam.length - 2)}</p>}
+              <div>
+                <p><strong>Admin Password Set:</strong> {debugInfo.hasAdminPassword ? 'Yes' : 'No'}</p>
+                <p><strong>Config File Exists:</strong> {debugInfo.hasConfigFile ? 'Yes' : 'No'}</p>
+                <p><strong>Config Path:</strong> <code className="text-xs">{debugInfo.configPath}</code></p>
+                <p>
+                  <strong>Auth Key:</strong> {keyParam ? 
+                    <span className="text-green-400">Provided ✓</span> : 
+                    <span className="text-red-400">Missing ✗</span>}
+                </p>
               </div>
             </div>
+          ) : (
+            <p className="text-gray-400">Loading system information...</p>
+          )}
+        </CardContent>
+      </Card>
+      
+      {/* Main Configuration Card */}
+      <Card className="mb-6 bg-gray-900/50 border-gray-800">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Settings className="h-5 w-5 text-blue-400" />
+            Configuration
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">System Prompt</label>
+            <Textarea
+              value={systemPrompt}
+              onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setSystemPrompt(e.target.value)}
+              rows={6}
+              placeholder="Enter the system prompt for the AI model..."
+              className="w-full bg-gray-800 border-gray-700"
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              This defines how the AI assistant behaves when analyzing health data.
+            </p>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium mb-1">Gemini API Key (Optional)</label>
+            <Input
+              type="password"
+              value={apiKey}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setApiKey(e.target.value)}
+              placeholder="Enter a new API key to update..."
+              className="w-full bg-gray-800 border-gray-700"
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              Leave blank to keep the current API key. Get a key from <a href="https://makersuite.google.com/app/apikey" className="text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer">Google MakerSuite</a>.
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Fallback Model</label>
+              <select
+                value={fallbackModel}
+                onChange={(e: ChangeEvent<HTMLSelectElement>) => setFallbackModel(e.target.value)}
+                className="w-full p-2 rounded-md bg-gray-800 border border-gray-700 text-white"
+              >
+                <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+              </select>
+              <p className="text-xs text-gray-400 mt-1">
+                Model to use if the primary experimental model is unavailable.
+              </p>
+            </div>
             
-            {debugInfo && (
-              <div>
-                <h3 className="text-sm font-medium text-yellow-200 mb-2">Environment Variables</h3>
-                <div className="bg-gray-900/50 p-3 rounded text-xs font-mono">
-                  <p>ADMIN_PASSWORD set: {debugInfo.admin_password_set ? '✅ Yes' : '❌ No'}</p>
-                  <p>NEXT_PUBLIC_ADMIN_KEY set: {debugInfo.public_admin_key_set ? '✅ Yes' : '❌ No'}</p>
-                  <p>ADMIN_PASSWORD length: {debugInfo.admin_password_sample ? debugInfo.admin_password_sample.length : 0}</p>
-                  <p>NEXT_PUBLIC_ADMIN_KEY length: {debugInfo.public_admin_key_sample ? debugInfo.public_admin_key_sample.length : 0}</p>
+            <div>
+              <label className="block text-sm font-medium mb-1">Max Output Tokens</label>
+              <Input
+                type="number"
+                value={maxOutputTokens}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setMaxOutputTokens(e.target.value)}
+                min="100"
+                max="8192"
+                className="w-full bg-gray-800 border-gray-700"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Maximum length of AI responses (100-8192).
+              </p>
+            </div>
+            
+            <div className="md:col-span-2 pt-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={useFallback}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setUseFallback(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-700 bg-gray-800 text-blue-600"
+                />
+                <span>Enable model fallback (recommended)</span>
+              </label>
+              <p className="text-xs text-gray-400 mt-1 ml-6">
+                If checked, the system will fall back to the standard model if the experimental model fails.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+        <CardFooter className="flex justify-between border-t border-gray-800 pt-4">
+          <div>
+            {message && (
+              <div className={`flex items-start gap-2 text-sm ${configSaved ? 'text-green-400' : 'text-red-400'}`}>
+                {configSaved ? <CheckCircle className="h-4 w-4 mt-0.5" /> : <AlertTriangle className="h-4 w-4 mt-0.5" />}
+                <div>
+                  <p>{message}</p>
+                  {errorDetails && <pre className="mt-1 text-xs overflow-auto max-h-24 p-1 bg-gray-800 rounded">{errorDetails}</pre>}
                 </div>
               </div>
             )}
+          </div>
+          <Button 
+            onClick={saveConfig} 
+            disabled={loading}
+            className="bg-blue-600 hover:bg-blue-500 text-white"
+          >
+            {loading ? 'Saving...' : 'Save Configuration'}
+          </Button>
+        </CardFooter>
+      </Card>
+      
+      {/* Vercel deployment info */}
+      {showVercelInfo && (
+        <Card className="mb-6 bg-blue-950/30 border-blue-900/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Info className="h-5 w-5 text-blue-400" />
+              Deployment Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-blue-300">
+              For persistent configuration in production deployment, set the following environment variables in your Vercel project:
+            </p>
+            <ul className="list-disc list-inside text-xs text-blue-200 mt-2 space-y-1">
+              <li><code>GEMINI_API_KEY</code> - Your Gemini AI API key</li>
+              <li><code>SYSTEM_PROMPT</code> - Custom system prompt if desired</li>
+              <li><code>ADMIN_PASSWORD</code> - Admin console password</li>
+              <li><code>DEFAULT_GEMINI_MODEL</code> - Fallback model name</li>
+              <li><code>USE_FALLBACK_MODEL</code> - Set to 'true' or 'false'</li>
+            </ul>
+            <p className="text-xs text-blue-300 mt-3">
+              <a href="https://vercel.com/docs/environment-variables" className="underline" target="_blank" rel="noopener noreferrer">
+                Learn more about Vercel environment variables
+              </a>
+            </p>
+          </CardContent>
+        </Card>
+      )}
+      
+      {/* Debug card */}
+      <Card className="bg-gray-900/50 border-gray-800">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bug className="h-5 w-5 text-blue-400" />
+            Debug Information
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-sm">
+            <p>This information is useful for debugging configuration issues:</p>
             
-            <div>
-              <h3 className="text-sm font-medium text-yellow-200 mb-2">Troubleshooting Tips</h3>
-              <ul className="list-disc list-inside text-xs text-yellow-100/80 space-y-1">
-                <li>Ensure the 'key' parameter matches the ADMIN_PASSWORD environment variable</li>
-                <li>Check for proper URL encoding in the key parameter</li>
-                <li>Verify both environment variables are set in Vercel</li>
-                <li>Try clearing browser cache or using incognito mode</li>
+            <div className="mt-3 space-y-2">
+              <p>
+                <strong>Current URL:</strong>{' '}
+                <code className="text-xs bg-gray-800 px-1 py-0.5 rounded">
+                  {typeof window !== 'undefined' ? window.location.href : 'Not available'}
+                </code>
+              </p>
+              
+              <p>
+                <strong>Key Parameter:</strong>{' '}
+                {keyParam ? (
+                  <code className="text-xs bg-gray-800 px-1 py-0.5 rounded">
+                    {keyParam.substring(0, 3)}***{keyParam.substring(keyParam.length - 3)}
+                  </code>
+                ) : (
+                  <span className="text-red-400">Not provided</span>
+                )}
+              </p>
+              
+              <p>
+                <strong>PDF Upload Issues:</strong>{' '}
+                If you're experiencing issues with PDF uploads, check the following:
+              </p>
+              <ul className="list-disc list-inside text-xs ml-4 text-gray-300 space-y-1">
+                <li>Maximum file size is 10MB</li>
+                <li>PDF should be text-based, not scanned images without OCR</li>
+                <li>Gemini API key must be valid with appropriate permissions</li>
+                <li>Network connectivity to Google's Gemini API servers</li>
               </ul>
             </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="border border-blue-900/30 bg-gray-900/70 backdrop-blur-sm">
-          <CardHeader className="border-b border-blue-900/20 pb-3">
-            <CardTitle className="flex items-center gap-2 text-xl text-blue-100">
-              <Settings className="h-5 w-5 text-blue-400" />
-              Configuration Settings
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6 pt-6">
-            <div className="space-y-2">
-              <label className="text-sm text-blue-200 font-medium">System Prompt</label>
-              <Textarea 
-                rows={10}
-                value={systemPrompt}
-                onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setSystemPrompt(e.target.value)}
-                placeholder="Enter the system prompt for the health assistant..."
-                className="bg-gray-800/50 border-blue-900/30 text-gray-100 focus-visible:ring-blue-500"
-                disabled={loading}
-              />
-              <p className="text-xs text-gray-400">This is the base prompt that instructs the AI how to analyze health data</p>
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm text-blue-200 font-medium">Gemini API Key (leave blank to keep current)</label>
-              <Input 
-                type="password"
-                value={apiKey}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setApiKey(e.target.value)}
-                placeholder="Enter new Gemini API key" 
-                className="bg-gray-800/50 border-blue-900/30 text-gray-100 focus-visible:ring-blue-500"
-                disabled={loading}
-              />
-            </div>
-            
-            {message && (
-              <div className={`p-3 rounded ${message.includes('success') || message.includes('dashboard') ? 'bg-green-900/20 border border-green-900/30 text-green-300' : 'bg-red-900/20 border border-red-900/30 text-red-300'}`}>
-                <div className="flex gap-2 items-start">
-                  {message.includes('success') || message.includes('dashboard') ? (
-                    <CheckCircle className="h-5 w-5 text-green-400 flex-shrink-0 mt-0.5" />
-                  ) : (
-                    <AlertTriangle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
-                  )}
-                  <div>
-                    <p className="font-medium">{message}</p>
-                    {errorDetails && (
-                      <pre className="mt-2 p-2 bg-black/20 rounded text-xs overflow-x-auto">
-                        {errorDetails}
-                      </pre>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-          <CardFooter className="border-t border-blue-900/20 pt-4">
-            <Button 
-              onClick={saveConfig}
-              disabled={loading}
-              className="bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50"
-            >
-              {loading ? 'Saving...' : 'Save Configuration'}
-            </Button>
-          </CardFooter>
-        </Card>
-      </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
-  );
+  )
 }
 
-// Main admin page with suspense boundary
+// Wrap the component with Suspense
 export default function AdminPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-b from-gray-950 to-blue-950 py-8 flex items-center justify-center">
-        <div className="bg-gray-900/70 p-6 rounded-lg border border-blue-900/30 shadow-xl">
-          <h2 className="text-xl font-medium text-blue-100 mb-3">Loading Admin Panel...</h2>
-          <div className="flex space-x-2 justify-center">
-            <div className="h-3 w-3 bg-blue-500 rounded-full animate-pulse"></div>
-            <div className="h-3 w-3 bg-blue-500 rounded-full animate-pulse delay-75"></div>
-            <div className="h-3 w-3 bg-blue-500 rounded-full animate-pulse delay-150"></div>
+    <div className="min-h-screen bg-gradient-to-b from-gray-950 to-blue-950 text-white">
+      <header className="border-b border-blue-900/30 bg-gray-900/70 backdrop-blur-sm p-4">
+        <div className="container">
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center">
+              <HeartPulse className="h-5 w-5 text-white" />
+            </div>
+            <h1 className="text-lg font-medium text-blue-100">Health Insights AI <span className="text-blue-400">Admin</span></h1>
           </div>
         </div>
-      </div>
-    }>
-      <AdminContent />
-    </Suspense>
-  );
+      </header>
+      
+      <Suspense fallback={<div className="container py-8 text-center">Loading admin console...</div>}>
+        <AdminContent />
+      </Suspense>
+    </div>
+  )
 } 

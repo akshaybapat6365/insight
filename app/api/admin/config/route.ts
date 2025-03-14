@@ -1,45 +1,62 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { DEFAULT_SYSTEM_PROMPT } from '@/lib/constants'
-
-// Get the current system prompt from environment variable or use the default
-function getSystemPrompt() {
-  return process.env.SYSTEM_PROMPT || DEFAULT_SYSTEM_PROMPT
-}
+import { loadConfig, saveConfig, getEnvironmentInfo } from '@/lib/config'
 
 export async function GET() {
-  // Return the current system prompt
+  // Get the current configuration
+  const config = loadConfig();
+  const envInfo = getEnvironmentInfo();
+  
   return NextResponse.json({
-    systemPrompt: getSystemPrompt()
+    systemPrompt: config.systemPrompt,
+    fallbackModel: config.fallbackModel,
+    useFallback: config.useFallback,
+    maxOutputTokens: config.maxOutputTokens,
+    hasApiKey: !!config.apiKey,
+    environmentInfo: envInfo
   })
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
+    const body = await request.json();
     
-    // In serverless environments like Vercel, we can't write to the file system
-    // Instead, we log the values that would be set, and you can update them
-    // in the Vercel project settings
+    // Create an update object with only the fields that were provided
+    const updates: any = {};
     
-    console.log('Would update SYSTEM_PROMPT to:', body.systemPrompt)
-    if (body.apiKey) {
-      console.log('Would update GEMINI_API_KEY to: [API key provided]')
-      
-      // We can still set the environment variable for the current instance
-      // This won't persist across function invocations but can be useful for testing
-      process.env.GEMINI_API_KEY = body.apiKey
+    if (body.systemPrompt !== undefined) {
+      updates.systemPrompt = body.systemPrompt;
     }
     
-    // Return instruction to update environment variables manually
+    if (body.apiKey) {
+      updates.apiKey = body.apiKey;
+    }
+    
+    if (body.fallbackModel) {
+      updates.fallbackModel = body.fallbackModel;
+    }
+    
+    if (body.useFallback !== undefined) {
+      updates.useFallback = body.useFallback;
+    }
+    
+    if (body.maxOutputTokens) {
+      updates.maxOutputTokens = parseInt(body.maxOutputTokens, 10);
+    }
+    
+    // Save the configuration
+    const result = await saveConfig(updates);
+    
+    // Return the result
     return NextResponse.json({ 
-      success: true,
-      message: "In serverless environments, configuration changes need to be made in Vercel dashboard. Your changes have been logged but not permanently saved."
-    })
+      success: result.success,
+      message: result.message,
+      environmentInfo: getEnvironmentInfo()
+    });
   } catch (error) {
-    console.error('Error processing config request:', error)
+    console.error('Error processing config request:', error);
     return NextResponse.json({ 
       success: false, 
       error: `Error processing request: ${error instanceof Error ? error.message : 'Unknown error'}` 
-    }, { status: 500 })
+    }, { status: 500 });
   }
 } 
