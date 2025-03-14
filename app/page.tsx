@@ -116,6 +116,26 @@ export default function Chat() {
           </div>
         )}
         
+        {/* Lab Analyzer Promo Card */}
+        <div className="mb-6 p-4 rounded-lg bg-gradient-to-br from-blue-900/40 to-indigo-900/40 border border-blue-800/50">
+          <div className="flex flex-col md:flex-row items-center gap-4">
+            <div className="bg-blue-500/20 p-3 rounded-full">
+              <Microscope className="h-8 w-8 text-blue-400" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-medium text-blue-100 mb-1">Advanced Lab Report Analysis</h3>
+              <p className="text-blue-300 text-sm mb-3">
+                Upload your medical lab reports for detailed analysis and get personalized insights about what your results mean for your health.
+              </p>
+              <Link href="/health-analyzer">
+                <Button className="bg-blue-600 hover:bg-blue-500 text-white">
+                  Analyze Lab Reports
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+        
         {messages.length === 0 && (
           <div className="text-center py-8">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-900/20 mb-4">
