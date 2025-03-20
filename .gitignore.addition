@@ -1,0 +1,2 @@
+# Add this file to .gitignore to prevent accidental commits
+CREDENTIALS_DO_NOT_COMMIT.md

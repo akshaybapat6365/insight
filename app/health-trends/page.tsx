@@ -7,6 +7,10 @@ import Link from 'next/link';
 import { ArrowLeft, LineChart, Calendar, AlertCircle, Plus, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
+// Define file validation constants
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+const VALID_FILE_TYPES = ['application/pdf', 'text/plain', 'text/csv', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'];
+
 type LabReport = {
   id: string;
   name: string;
@@ -22,11 +26,33 @@ type LabReport = {
   };
 };
 
+// Helper function to validate files
+function validateFile(file: File): { valid: boolean; error?: string } {
+  // Check file type
+  if (!VALID_FILE_TYPES.includes(file.type)) {
+    return {
+      valid: false, 
+      error: `Unsupported file type: ${file.type}. Please upload a PDF, CSV, or Excel file.`
+    };
+  }
+  
+  // Check file size
+  if (file.size > MAX_FILE_SIZE) {
+    return {
+      valid: false,
+      error: `File too large (${(file.size / (1024 * 1024)).toFixed(2)}MB). Maximum size is 20MB.`
+    };
+  }
+  
+  return { valid: true };
+}
+
 export default function HealthTrends() {
   const [reports, setReports] = useState<LabReport[]>([]);
   const [selectedMetrics, setSelectedMetrics] = useState<string[]>([]);
   const [trendAnalysis, setTrendAnalysis] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState('');
 
   // Mock data for initial testing
@@ -36,12 +62,24 @@ export default function HealthTrends() {
     setReports(mockReports);
   }, []);
 
-  const handleFileProcessed = async (text: string) => {
+  const handleFileProcessed = async (text: string, file?: File) => {
+    if (file) {
+      // Validate file before processing
+      const validation = validateFile(file);
+      if (!validation.valid) {
+        setError(validation.error || 'Invalid file');
+        return;
+      }
+    }
+    
+    setIsProcessing(true);
+    setError('');
+    
     try {
       // Create a new report entry
       const newReport: LabReport = {
         id: Date.now().toString(),
-        name: 'Lab Report ' + (reports.length + 1),
+        name: file ? file.name : `Lab Report ${reports.length + 1}`,
         date: new Date().toISOString().split('T')[0],
         content: text
       };
@@ -52,12 +90,16 @@ export default function HealthTrends() {
       // Process the report to extract metrics
       await processReport(newReport);
     } catch (err: any) {
-      setError(`Error processing report: ${err.message}`);
+      setError(`Error processing report: ${err.message || 'Unknown error occurred'}`);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   const processReport = async (report: LabReport) => {
     try {
+      setIsProcessing(true);
+      
       // We would normally send the report content to the API for processing
       const response = await fetch('/api/process-report-metrics', {
         method: 'POST',
@@ -73,6 +115,10 @@ export default function HealthTrends() {
       }
 
       const data = await response.json();
+      
+      if (!data.metrics || Object.keys(data.metrics).length === 0) {
+        throw new Error('No metrics could be extracted from this report. Please check the format and try again.');
+      }
       
       // Update the report with the extracted metrics
       setReports(prev => 
@@ -91,7 +137,12 @@ export default function HealthTrends() {
       }
     } catch (err: any) {
       console.error('Error processing report metrics:', err);
-      setError(`Error extracting metrics: ${err.message}`);
+      setError(`Error extracting metrics: ${err.message || 'Unknown error occurred'}`);
+      
+      // Remove the report if processing failed
+      setReports(prev => prev.filter(r => r.id !== report.id));
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -103,6 +154,19 @@ export default function HealthTrends() {
 
     if (selectedMetrics.length === 0) {
       setError('Please select at least one health metric to analyze.');
+      return;
+    }
+    
+    // Check that selected metrics exist in at least two reports
+    const metricsInMultipleReports = selectedMetrics.filter(metric => {
+      const reportsWithMetric = reports.filter(
+        report => report.metrics && report.metrics[metric]
+      );
+      return reportsWithMetric.length >= 2;
+    });
+    
+    if (metricsInMultipleReports.length === 0) {
+      setError('No selected metrics appear in multiple reports. Please select metrics that appear in at least two reports.');
       return;
     }
 
@@ -127,10 +191,15 @@ export default function HealthTrends() {
       }
 
       const data = await response.json();
+      
+      if (!data.analysis) {
+        throw new Error('No analysis was returned from the server.');
+      }
+      
       setTrendAnalysis(data.analysis);
     } catch (err: any) {
       console.error('Error analyzing health trends:', err);
-      setError(`Error: ${err.message}`);
+      setError(`Error: ${err.message || 'Unknown error occurred'}`);
     } finally {
       setIsAnalyzing(false);
     }
@@ -220,6 +289,7 @@ export default function HealthTrends() {
                         <button 
                           onClick={() => removeReport(report.id)}
                           className="p-1.5 text-gray-500 hover:text-gray-300 hover:bg-gray-800 rounded-full"
+                          aria-label={`Remove ${report.name}`}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>

@@ -3,8 +3,38 @@ import fs from 'fs';
 import path from 'path';
 import { getEnvironmentInfo } from '@/lib/config';
 import os from 'os';
+import { auth } from '@clerk/nextjs';
+
+// Check if user is an admin
+async function isAdmin(userId: string | null) {
+  if (!userId) return false;
+  
+  // Check if the user ID matches the admin ID from environment variables
+  const adminUserId = process.env.ADMIN_USER_ID;
+  
+  if (adminUserId && userId === adminUserId) {
+    return true;
+  }
+  
+  // Alternative: Check for admin role in Clerk user metadata
+  // This would require additional setup in Clerk
+  return false;
+}
 
 export async function GET() {
+  // Authenticate using Clerk
+  const { userId } = auth();
+  
+  // Check if user is authenticated and is an admin
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized - Not authenticated' }, { status: 401 });
+  }
+  
+  const isUserAdmin = await isAdmin(userId);
+  if (!isUserAdmin) {
+    return NextResponse.json({ error: 'Unauthorized - Not an admin' }, { status: 403 });
+  }
+  
   // Get basic environment info from our utility
   const envInfo = getEnvironmentInfo();
   

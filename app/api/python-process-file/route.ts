@@ -4,7 +4,9 @@ import { getGeminiModel, fallbackModel } from '@/lib/ai/gemini-provider'
 
 export const config = {
   api: {
-    bodyParser: false,
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
   },
   maxDuration: 60, // Increase timeout for file processing
 }
@@ -51,13 +53,33 @@ export async function POST(request: Request) {
     
     console.log('File converted to base64, length:', base64Data.length);
     
-    // Use an extraction prompt based on file type
-    let extractionPrompt = "This is a lab report. Extract all text from this document that appears to be related to medical test results or health data. Format it clearly with test names, values, and reference ranges if present.";
+    // Get file extension for better MIME type detection
+    const fileExtension = file.name.split('.').pop()?.toLowerCase() || '';
     
-    if (file.type.includes('image')) {
-      extractionPrompt = "This is a medical image or document. Extract all visible text and data, especially test results, values, and reference ranges if present.";
-    } else if (file.type.includes('pdf')) {
+    // Use an extraction prompt based on file type and extension
+    let extractionPrompt = "This is a lab report. Extract all text from this document that appears to be related to medical test results or health data. Format it clearly with test names, values, and reference ranges if present.";
+    let mimeType = file.type;
+    
+    // Handle images
+    if (file.type.includes('image') || ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExtension)) {
+      extractionPrompt = "This is a medical image or document. Extract all visible text and data, especially test results, values, and reference ranges if present. Organize it in a structured format.";
+      // Ensure image MIME type is set correctly
+      if (!file.type.includes('image')) {
+        mimeType = `image/${fileExtension}`;
+      }
+    } 
+    // Handle PDFs
+    else if (file.type.includes('pdf') || fileExtension === 'pdf') {
       extractionPrompt = "This is a PDF medical document. Extract all text with special focus on lab results, biomarkers, test values, and their reference ranges. Format the data in a clean, readable way with clear labels for each test and value.";
+      // Ensure PDF MIME type is set correctly
+      if (!file.type.includes('pdf')) {
+        mimeType = 'application/pdf';
+      }
+    }
+    // Handle text files
+    else if (file.type.includes('text') || fileExtension === 'txt') {
+      extractionPrompt = "This is a text file containing medical information. Extract all health-related data, focusing on lab results, biomarkers, and their values and reference ranges. Format it in a structured way.";
+      mimeType = 'text/plain';
     }
     
     console.log('Sending request to Gemini API with model:', modelName);
@@ -71,7 +93,7 @@ export async function POST(request: Request) {
             role: "user",
             parts: [
               { text: extractionPrompt },
-              { inlineData: { mimeType: file.type, data: base64Data } }
+              { inlineData: { mimeType: mimeType, data: base64Data } }
             ]
           }
         ]
@@ -100,7 +122,7 @@ export async function POST(request: Request) {
               role: "user",
               parts: [
                 { text: extractionPrompt },
-                { inlineData: { mimeType: file.type, data: base64Data } }
+                { inlineData: { mimeType: mimeType, data: base64Data } }
               ]
             }
           ]
