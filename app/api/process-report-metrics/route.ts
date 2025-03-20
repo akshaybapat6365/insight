@@ -1,208 +1,173 @@
+export const runtime = 'nodejs';
+
 import { NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { loadConfig } from '@/lib/config';
 import { getGeminiModel, fallbackModel } from '@/lib/ai/gemini-provider';
 
-// System prompt for the AI model to extract metrics
-const SYSTEM_PROMPT = `# Task: Extract Health Metrics from Lab Reports
+// Allowed file types
+const allowedTypes = [
+  'application/pdf',
+  'text/plain',
+  'text/csv',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel',
+];
 
-Your task is to analyze the provided lab report text and extract all relevant health metrics in a structured format. Follow these guidelines:
+// System prompt for extracting health metrics from reports
+const SYSTEM_PROMPT = `
+You are a healthcare data analyst assistant. Your task is to extract health metrics from provided lab reports.
+Extract all health metrics from the report and structure them as a JSON array.
 
-1. Identify all health metrics/biomarkers in the lab report (e.g., Glucose, HbA1c, Cholesterol, etc.)
-2. For each metric, extract:
-   - The exact numerical value
-   - The unit of measurement
-   - The normal reference range if provided
-   - The status (normal, high, low) based on the reference range
+For each metric:
+- name: The name of the metric (e.g., "Glucose", "LDL Cholesterol")
+- value: The numeric value
+- unit: The unit of measurement (e.g., "mg/dL", "mmol/L")
+- range: The reference range if provided (e.g., "70-99", "<100")
+- status: Whether the value is "normal", "high", or "low" based on the reference range
 
-## Response Format
-Return a JSON object with the following structure:
-{
-  "metrics": {
-    "Glucose": {
-      "value": 95,
-      "unit": "mg/dL",
-      "normalRange": "70-99 mg/dL",
-      "status": "normal"
-    },
-    "Total Cholesterol": {
-      "value": 210,
-      "unit": "mg/dL",
-      "normalRange": "<200 mg/dL",
-      "status": "high"
-    }
-    // Add all identified metrics
-  }
-}
-
-## Important Notes:
-- Only extract metrics that have numerical values
-- Always include units when available
-- Be precise with the metric names for consistency across reports
-- If a normal range isn't provided, omit the normalRange field
-- If status can't be determined, omit the status field
-- Process all metrics you can find in the report
+IMPORTANT:
+- Return ONLY the JSON array with no other text
+- Only include metrics that have clear numeric values
+- Include all relevant health metrics present in the report
+- Format your response as a valid JSON array of objects
 `;
 
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   try {
-    // Parse the request body
-    const body = await request.json();
-    const { content } = body;
+    // Check if form data
+    const formData = await req.formData();
+    const file = formData.get('file') as File;
     
-    if (!content) {
-      return NextResponse.json(
-        { error: 'No content provided' },
-        { status: 400 }
-      );
+    if (!file) {
+      return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
     }
     
-    console.log('Processing lab report for metrics extraction, content length:', content.length);
+    // Validate file type
+    if (!allowedTypes.includes(file.type)) {
+      return NextResponse.json({ 
+        error: 'Invalid file type. Please upload a PDF, TXT, CSV, or Excel file' 
+      }, { status: 400 });
+    }
     
-    // Load configuration
-    const config = loadConfig();
+    // For this MVP, we'll just extract the text content from the file
+    // In a production app, you'd want more sophisticated file parsing
+    let content = '';
     
-    // Check for API key
-    const apiKey = config.apiKey || process.env.GEMINI_API_KEY || '';
+    if (file.type === 'application/pdf') {
+      // For PDFs, read as arrayBuffer and use pdf-parse in a real implementation
+      content = await file.text(); // Simplified for MVP
+    } else {
+      // For text-based files, just read as text
+      content = await file.text();
+    }
+    
+    // Ensure we have some content to process
+    if (!content || content.trim().length < 10) {
+      return NextResponse.json({ 
+        error: 'The uploaded file contains no readable text or is too short' 
+      }, { status: 400 });
+    }
+    
+    // Initialize the AI model
+    const apiKey = process.env.GOOGLE_API_KEY;
     if (!apiKey) {
-      console.error('Gemini API key not configured');
-      return NextResponse.json(
-        { error: 'API key not configured. Please add a valid Gemini API key in the admin console.' },
-        { status: 500 }
-      );
+      return NextResponse.json({ 
+        error: 'API key not configured' 
+      }, { status: 500 });
     }
-    
-    // Configure AI settings
-    const modelName = getGeminiModel();
-    console.log(`Using model: ${modelName} for metrics extraction`);
     
     // Initialize the Gemini API client
-    const genAI = new GoogleGenAI({
-      apiKey: apiKey
-    });
+    const genAI = new GoogleGenerativeAI(apiKey);
     
     try {
-      // Generate response with Gemini
-      const result = await genAI.models.generateContent({
-        model: modelName,
+      // Ask Gemini to extract and organize metrics
+      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      
+      const result = await model.generateContent({
         contents: [
-          {
-            role: "user",
-            parts: [
-              { text: SYSTEM_PROMPT },
-              { text: "Lab report contents: " + content }
-            ]
+          { 
+            role: "user", 
+            parts: [{ 
+              text: `${SYSTEM_PROMPT}
+                    The text to analyze is: ${content}`
+            }]
           }
         ],
-        // Force JSON response with generationConfig
         generationConfig: {
-          responseType: "json_object"
+          temperature: 0.2,
+          topK: 32,
+          topP: 0.95,
+          maxOutputTokens: 8192
         }
       });
+
+      const response = result.response;
+      const responseText = response.text();
       
-      // Parse the response
-      let metricsData;
+      // Try to parse the response as JSON
       try {
-        // Try to extract JSON from the response
-        const responseText = result.text;
-        // Check if result is already valid JSON
-        try {
-          metricsData = JSON.parse(responseText);
-        } catch {
-          // If not, try to extract JSON using regex
-          const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            metricsData = JSON.parse(jsonMatch[0]);
-          } else {
-            throw new Error('Could not extract JSON from response');
-          }
-        }
-      } catch (parseError) {
-        console.error('Error parsing metrics JSON:', parseError);
-        return NextResponse.json(
-          { error: 'Failed to parse metrics from the report' },
-          { status: 500 }
-        );
-      }
-      
-      return NextResponse.json({
-        success: true,
-        metrics: metricsData.metrics || {},
-        model: modelName
-      });
-      
-    } catch (error: any) {
-      console.error('Error processing lab report with primary model:', error);
-      
-      // Try with fallback model
-      try {
-        console.log(`Falling back to ${fallbackModel}`);
+        // The model should return a JSON array
+        const metrics = JSON.parse(responseText);
         
-        const fallbackResult = await genAI.models.generateContent({
-          model: fallbackModel,
+        return NextResponse.json({ 
+          metrics,
+          success: true 
+        });
+      } catch (jsonError) {
+        console.error('Error parsing model response as JSON:', jsonError);
+        
+        // If parsing fails, return the raw text response
+        return NextResponse.json({ 
+          rawResponse: responseText,
+          error: 'Failed to parse metrics as JSON',
+          success: false 
+        }, { status: 500 });
+      }
+    } catch (aiError) {
+      console.error('Primary model error:', aiError);
+      
+      // Try fallback model
+      try {
+        // Fallback to a simpler approach
+        const fallbackModel = genAI.getGenerativeModel({ model: "gemini-pro" });
+        
+        const fallbackResult = await fallbackModel.generateContent({
           contents: [
-            {
-              role: "user",
-              parts: [
-                { text: SYSTEM_PROMPT },
-                { text: "Lab report contents: " + content }
-              ]
+            { 
+              role: "user", 
+              parts: [{ 
+                text: `Extract health metrics from this text and return as JSON: ${content}`
+              }]
             }
           ],
           generationConfig: {
-            responseType: "json_object"
+            temperature: 0.1,
+            maxOutputTokens: 4096
           }
         });
         
-        // Parse the fallback response
-        let fallbackMetricsData;
-        try {
-          const fallbackResponseText = fallbackResult.text;
-          try {
-            fallbackMetricsData = JSON.parse(fallbackResponseText);
-          } catch {
-            const jsonMatch = fallbackResponseText.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-              fallbackMetricsData = JSON.parse(jsonMatch[0]);
-            } else {
-              throw new Error('Could not extract JSON from fallback response');
-            }
-          }
-        } catch (parseError) {
-          console.error('Error parsing fallback metrics JSON:', parseError);
-          return NextResponse.json(
-            { error: 'Failed to parse metrics from the report (fallback failed)' },
-            { status: 500 }
-          );
-        }
+        const fallbackResponse = fallbackResult.response;
+        const fallbackText = fallbackResponse.text();
         
-        return NextResponse.json({
-          success: true,
-          metrics: fallbackMetricsData.metrics || {},
-          model: fallbackModel,
-          fallback: true
+        return NextResponse.json({ 
+          rawResponse: fallbackText,
+          fallback: true,
+          success: false
         });
-        
-      } catch (fallbackError: any) {
-        console.error('Fallback model also failed:', fallbackError);
-        return NextResponse.json(
-          {
-            error: 'Both primary and fallback AI models failed to extract metrics.',
-            originalError: error.message,
-            fallbackError: fallbackError.message
-          },
-          { status: 500 }
-        );
+      } catch (fallbackError) {
+        console.error('Fallback model error:', fallbackError);
+        return NextResponse.json({ 
+          error: 'Failed to extract metrics from the report',
+          success: false 
+        }, { status: 500 });
       }
     }
-  } catch (error: any) {
-    console.error('Error processing report for metrics:', error);
-    return NextResponse.json(
-      {
-        error: error.message || 'An error occurred during metrics extraction',
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-      },
-      { status: 500 }
-    );
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return NextResponse.json({ 
+      error: 'An unexpected error occurred processing the report',
+      success: false 
+    }, { status: 500 });
   }
 } 
