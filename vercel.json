@@ -5,8 +5,8 @@
   "framework": "nextjs",
   "rewrites": [
     {
-      "source": "/admin",
-      "destination": "/admin"
+      "source": "/(.*)",
+      "destination": "/"
     }
   ],
   "headers": [
