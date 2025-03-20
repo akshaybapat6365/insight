@@ -31,5 +31,14 @@
   "env": {
     "NEXTAUTH_URL": "https://health-insights-ai.vercel.app",
     "NODE_ENV": "production"
-  }
+  },
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/node",
+      "config": {
+        "nodeVersion": "20.x"
+      }
+    }
+  ]
 } 
