@@ -1,42 +1,29 @@
 // Adding Node.js runtime configuration at the top
 export const runtime = 'nodejs';
 
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
-import { auth } from './auth'
+import { authMiddleware } from "@clerk/nextjs";
 
-export async function middleware(request: NextRequest) {
-  // Get the pathname of the request
-  const path = request.nextUrl.pathname;
-
-  // Admin authentication using both NextAuth and password parameter
-  if (path.startsWith('/admin')) {
-    // Check for password in URL for legacy support
-    const url = request.nextUrl.clone();
-    const keyParam = url.searchParams.get('key');
-    const adminPassword = process.env.ADMIN_PASSWORD || 'adminpass';
-    
-    // If the key parameter matches the admin password, allow access
-    if (keyParam === adminPassword) {
-      return NextResponse.next();
-    }
-    
-    // Otherwise, check for authenticated session
-    const session = await auth();
-    const adminEmail = process.env.ADMIN_EMAIL;
-    
-    // If no session or session email doesn't match admin email, redirect to sign in
-    if (!session?.user || (adminEmail && session.user.email !== adminEmail)) {
-      // Redirect unauthenticated users to the sign-in page with a return URL
-      return NextResponse.redirect(
-        new URL(`/auth/signin?callbackUrl=${encodeURIComponent(path)}`, request.url)
-      );
-    }
-  }
-
-  return NextResponse.next();
-}
+// This example protects all routes including api/trpc routes
+// Please edit this to allow other routes to be public as needed.
+// See https://clerk.com/docs/references/nextjs/auth-middleware for more information about configuring your middleware
+export default authMiddleware({
+  // Routes that can be accessed while signed out
+  publicRoutes: [
+    "/", 
+    "/api/chat",
+    "/api/webhook",
+    "/health-analyzer",
+    "/health-trends",
+    // Admin route is protected by a separate check for admin role
+    "/admin"
+  ],
+  // Routes that can always be accessed, and have
+  // no authentication information
+  ignoredRoutes: [
+    "/api/webhook",
+  ],
+});
 
 export const config = {
-  matcher: ['/admin/:path*']
-} 
+  matcher: ['/((?!.+\\.[\\w]+$|_next).*)', '/', '/(api|trpc)(.*)'],
+}; 
