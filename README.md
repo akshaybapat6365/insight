@@ -7,6 +7,8 @@ A simple AI-powered health data analysis tool built with Next.js, Vercel AI, and
 - AI chat interface for answering health questions
 - File upload for analyzing health reports and bloodwork
 - **Health Trends** for tracking changes in lab results over time
+- **Chat History** for saving and retrieving past conversations
+- Google Sign-In authentication for personalized experience
 - Admin console for changing system prompts and settings
 - Minimal, dark-themed UI focused on health insights
 - Multi-format upload support (PDF, JPEG, CSV, Excel)
@@ -63,6 +65,8 @@ npm run dev
 
 - **Frontend**: Next.js 15.x, TypeScript, Tailwind CSS
 - **AI Integration**: Google Gemini API, Vercel AI SDK
+- **Authentication**: NextAuth.js with Google provider
+- **Database**: SQLite with Prisma ORM
 - **Styling**: Custom health-themed UI components
 
 ## Usage
@@ -73,6 +77,7 @@ The main interface allows users to:
 - Ask health-related questions directly
 - Upload health reports for AI analysis
 - Receive educational explanations about health metrics and terminology
+- Save chat history for future reference when signed in
 
 ### Health Trends Analyzer
 
@@ -82,6 +87,14 @@ The Health Trends Analyzer enables users to:
 - Select specific health metrics for trend analysis
 - Compare changes in metrics across different time periods
 - Receive AI-generated insights about health metric patterns
+
+### Chat History
+
+The Chat History feature enables users to:
+- View all previous conversations with the AI assistant
+- Continue past conversations where they left off
+- Delete unwanted chat threads
+- Organize health conversations by topic or date
 
 ### Admin Console
 
@@ -104,3 +117,34 @@ Health Insights AI provides educational information only, not medical advice. Al
 - [Tailwind CSS](https://tailwindcss.com/)
 - [Vercel](https://vercel.com/)
 - [AI SDK](https://ai.dev/)
+
+## Database Setup
+
+The application uses SQLite with Prisma ORM for data persistence:
+
+```bash
+# Initialize Prisma
+npx prisma init
+
+# After modifying the schema, push changes to the database
+npx prisma db push
+
+# Generate Prisma client
+npx prisma generate
+
+# Open Prisma Studio to view/edit data
+npx prisma studio
+```
+
+## Authentication Configuration
+
+To configure Google authentication:
+
+1. Create a Google Cloud project and OAuth credentials at https://console.cloud.google.com
+2. Add the following to your `.env.local` file:
+   ```
+   GOOGLE_CLIENT_ID=your_client_id
+   GOOGLE_CLIENT_SECRET=your_client_secret
+   NEXTAUTH_URL=http://localhost:3000 (or your deployment URL)
+   NEXTAUTH_SECRET=your_random_secret_key
+   ```
