@@ -54,6 +54,13 @@ export default function Chat() {
             <h1 className="text-lg font-medium text-white">Health Insights AI</h1>
           </div>
           <div className="flex items-center gap-4">
+            <Link 
+              href="/chat"
+              className="text-gray-400 hover:text-white text-sm flex items-center gap-1.5"
+            >
+              <Bot className="h-3.5 w-3.5" />
+              <span>Chat History</span>
+            </Link>
             <AuthButtons />
             <a 
               href={adminUrl}
