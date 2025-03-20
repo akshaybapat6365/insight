@@ -3,9 +3,7 @@ export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { loadConfig } from '@/lib/config';
 import { geminiModel, fallbackModel, createFreshGeminiClient } from '@/lib/ai/gemini-provider';
-import { auth } from '@/auth';
 import { saveChat } from '@/lib/services/chat-service';
 
 // System prompt for the health assistant
@@ -32,13 +30,9 @@ Remember: Your role is to educate, not to replace healthcare providers.`;
 
 export async function POST(req: Request) {
   try {
-    // Get the session to check if user is authenticated
-    const session = await auth();
-    const userId = session?.user?.id;
-
     // Parse the request body
     const body = await req.json();
-    const { messages, chatId } = body;
+    const { messages, chatId, userId } = body;
 
     // Validate input
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -94,14 +88,30 @@ export async function POST(req: Request) {
         id: Date.now().toString()
       };
 
-      // Save the chat in the database if user is authenticated
+      // Save the chat to the database if user is authenticated
       if (userId && chatId) {
-        const allMessages = [...messages, responseMessage];
-        await saveChat(userId, chatId, allMessages);
+        try {
+          // Add the assistant's response to the messages array
+          const updatedMessages = [
+            ...messages,
+            responseMessage
+          ];
+          
+          await saveChat({
+            chatId,
+            userId,
+            messages: updatedMessages
+          });
+        } catch (saveError) {
+          console.error('Error saving chat:', saveError);
+          // Continue with the response even if saving fails
+        }
       }
 
+      // Return the response
       return NextResponse.json({
-        message: responseMessage
+        role: 'assistant',
+        content: responseText
       });
 
     } catch (error: any) {
@@ -140,12 +150,27 @@ export async function POST(req: Request) {
 
         // Save the chat in the database if user is authenticated
         if (userId && chatId) {
-          const allMessages = [...messages, fallbackResponseMessage];
-          await saveChat(userId, chatId, allMessages);
+          try {
+            // Add the assistant's response to the messages array
+            const updatedMessages = [
+              ...messages,
+              fallbackResponseMessage
+            ];
+            
+            await saveChat({
+              chatId,
+              userId,
+              messages: updatedMessages
+            });
+          } catch (saveError) {
+            console.error('Error saving chat with fallback model:', saveError);
+            // Continue with the response even if saving fails
+          }
         }
 
         return NextResponse.json({
-          message: fallbackResponseMessage,
+          role: 'assistant',
+          content: fallbackResponseText,
           fallback: true
         });
         
