@@ -30,6 +30,7 @@ The Health Trends feature allows users to:
 ### Prerequisites
 
 - Google Gemini API key (get from https://ai.google.dev/)
+- Google OAuth credentials (create from https://console.cloud.google.com/)
 - Vercel account
 
 ### Steps to Deploy
@@ -39,9 +40,29 @@ The Health Trends feature allows users to:
 3. Connect to Vercel and create a new project from your repository
 4. Set the following environment variables in Vercel:
    - `GEMINI_API_KEY`: Your Google Gemini API key
+   - `NEXTAUTH_URL`: Your production URL (e.g., https://your-app.vercel.app)
+   - `NEXTAUTH_SECRET`: A secure random string for session encryption
+   - `GOOGLE_CLIENT_ID`: Your Google OAuth client ID
+   - `GOOGLE_CLIENT_SECRET`: Your Google OAuth client secret
    - `ADMIN_PASSWORD`: A password to access the admin console (example: "healthadmin2024")
 5. Deploy the project
 6. Access the admin console at: `https://your-app-url.vercel.app/admin?key=yourpassword`
+
+### Deploying via Vercel CLI
+
+```bash
+# Install Vercel CLI globally
+npm install -g vercel
+
+# Login to Vercel
+vercel login
+
+# Deploy to production
+vercel --prod
+
+# OR specify environment variables during deployment
+vercel --prod --env GEMINI_API_KEY=your_api_key
+```
 
 ## Local Development
 
