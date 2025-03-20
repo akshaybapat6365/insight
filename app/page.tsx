@@ -6,7 +6,8 @@ import { FileUpload } from '@/components/file-upload';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import ReactMarkdown from 'react-markdown';
-import { Bot, User } from 'lucide-react';
+import { Bot, User, LineChart, Microscope } from 'lucide-react';
+import Link from 'next/link';
 
 export default function Chat() {
   const {
@@ -51,7 +52,7 @@ export default function Chat() {
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-medium text-white">Health Insights AI</h1>
           </div>
-          <div>
+          <div className="flex items-center gap-4">
             <a 
               href={adminUrl}
               className="text-gray-400 hover:text-white text-sm flex items-center gap-1.5"
@@ -70,6 +71,21 @@ export default function Chat() {
           {/* Left sidebar - File Upload */}
           <div className="md:col-span-4">
             <FileUpload onFileProcessed={handleFileProcessed} />
+            
+            {/* Health Features */}
+            <div className="mt-4 border border-gray-800 rounded-lg p-4 bg-black">
+              <h3 className="text-sm font-semibold text-white mb-3">Health Features</h3>
+              <div className="space-y-2">
+                <Link href="/health-analyzer" className="flex items-center p-2 rounded-md hover:bg-gray-900 text-gray-400 hover:text-white transition-colors">
+                  <Microscope className="h-4 w-4 mr-2" />
+                  <span className="text-sm">Lab Report Analyzer</span>
+                </Link>
+                <Link href="/health-trends" className="flex items-center p-2 rounded-md hover:bg-gray-900 text-gray-400 hover:text-white transition-colors">
+                  <LineChart className="h-4 w-4 mr-2" />
+                  <span className="text-sm">Health Trends Tracker</span>
+                </Link>
+              </div>
+            </div>
           </div>
           
           {/* Main chat area */}
