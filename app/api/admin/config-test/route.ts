@@ -2,9 +2,25 @@ import { NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import { auth } from '@clerk/nextjs'
 
 // The config file path used in the actual config API
 const CONFIG_PATH = path.join(process.cwd(), 'config.json')
+
+// Check if user is an admin
+async function isAdmin(userId: string | null) {
+  if (!userId) return false;
+  
+  // Check if the user ID matches the admin ID from environment variables
+  const adminUserId = process.env.ADMIN_USER_ID;
+  
+  if (adminUserId && userId === adminUserId) {
+    return true;
+  }
+  
+  // Alternative: Check for admin role in Clerk user metadata
+  return false;
+}
 
 // Define types for our diagnostics object
 type FileStats = {
@@ -46,6 +62,19 @@ type Diagnostics = {
 }
 
 export async function GET() {
+  // Authenticate using Clerk
+  const { userId } = auth();
+  
+  // Check if user is authenticated and is an admin
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized - Not authenticated' }, { status: 401 });
+  }
+  
+  const isUserAdmin = await isAdmin(userId);
+  if (!isUserAdmin) {
+    return NextResponse.json({ error: 'Unauthorized - Not an admin' }, { status: 403 });
+  }
+
   const diagnostics: Diagnostics = {
     system: {
       platform: os.platform(),

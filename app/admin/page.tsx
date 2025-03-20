@@ -7,28 +7,86 @@ import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card'
 import Link from 'next/link'
 import { HeartPulse, ArrowLeft, Settings, Bug, AlertTriangle, CheckCircle, Info, RefreshCw, Server } from 'lucide-react'
-import { useSearchParams } from 'next/navigation'
+import { useUser } from '@clerk/nextjs'
+import { useRouter } from 'next/navigation'
+
+// Interface for config state
+interface ConfigState {
+  systemPrompt: string;
+  fallbackModel: string;
+  useFallback: boolean;
+  maxOutputTokens: number;
+}
+
+// Validation interface
+interface ValidationErrors {
+  maxOutputTokens?: string;
+}
 
 // Component that uses search params
 function AdminContent() {
-  const [systemPrompt, setSystemPrompt] = useState('')
-  const [apiKey, setApiKey] = useState('')
-  const [fallbackModel, setFallbackModel] = useState('gemini-1.5-pro')
-  const [useFallback, setUseFallback] = useState(true)
-  const [maxOutputTokens, setMaxOutputTokens] = useState('1000')
-  const [message, setMessage] = useState('')
+  // Consolidated state for configuration fields
+  const [config, setConfig] = useState<ConfigState>({
+    systemPrompt: '',
+    fallbackModel: 'gemini-1.5-pro',
+    useFallback: true,
+    maxOutputTokens: 1000
+  });
+  
+  // API key management
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [maskedApiKey, setMaskedApiKey] = useState('');
+  
+  // UI state
+  const [statusMessage, setStatusMessage] = useState('')
   const [errorDetails, setErrorDetails] = useState('')
   const [loading, setLoading] = useState(false)
   const [debugInfo, setDebugInfo] = useState<any>(null)
   const [showVercelInfo, setShowVercelInfo] = useState(false)
   const [configSaved, setConfigSaved] = useState(false)
+  const [validationErrors, setValidationErrors] = useState<ValidationErrors>({})
   
-  // Get the search params to display the key (masked)
-  const searchParams = useSearchParams()
-  const keyParam = searchParams.get('key')
+  // Get the user from Clerk
+  const { user, isLoaded } = useUser()
+  const router = useRouter()
+  
+  // Handle input changes
+  const handleConfigChange = (field: keyof ConfigState, value: string | boolean | number) => {
+    setConfig(prev => ({ ...prev, [field]: value }));
+    
+    // Clear validation errors when field is edited
+    if (field in validationErrors) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field as keyof ValidationErrors];
+        return newErrors;
+      });
+    }
+  };
+  
+  // Validate config before saving
+  const validateConfig = (): boolean => {
+    const errors: ValidationErrors = {};
+    
+    // Validate maxOutputTokens
+    if (typeof config.maxOutputTokens !== 'number') {
+      errors.maxOutputTokens = 'Max output tokens must be a number';
+    } else if (config.maxOutputTokens < 100 || config.maxOutputTokens > 8192) {
+      errors.maxOutputTokens = 'Max output tokens must be between 100 and 8192';
+    }
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
   
   // Get debug info
   useEffect(() => {
+    if (isLoaded && !user) {
+      // Redirect unauthenticated users
+      router.push('/')
+      return
+    }
+
     fetch('/api/admin-debug')
       .then(res => res.json())
       .then(data => {
@@ -38,13 +96,14 @@ function AdminContent() {
       .catch(err => {
         console.error('Failed to load debug info:', err)
       })
-  }, [])
+  }, [isLoaded, user, router])
 
   // Function to refresh config and debug info
   const refreshData = () => {
     setLoading(true);
-    setMessage('');
+    setStatusMessage('');
     setErrorDetails('');
+    setValidationErrors({});
     
     // Refresh debug info
     fetch('/api/admin-debug')
@@ -55,6 +114,8 @@ function AdminContent() {
       })
       .catch(err => {
         console.error('Failed to refresh debug info:', err)
+        setStatusMessage('Failed to refresh debug info')
+        setErrorDetails(err.message || 'Unknown error')
       });
     
     // Load the current configuration
@@ -67,17 +128,20 @@ function AdminContent() {
       })
       .then(data => {
         console.log('Loaded config:', data)
-        setSystemPrompt(data.systemPrompt || '')
-        setFallbackModel(data.fallbackModel || 'gemini-1.5-pro')
-        setUseFallback(data.useFallback !== undefined ? data.useFallback : true)
-        setMaxOutputTokens(data.maxOutputTokens?.toString() || '1000')
-        setMessage('Configuration refreshed successfully')
+        setConfig({
+          systemPrompt: data.systemPrompt || '',
+          fallbackModel: data.fallbackModel || 'gemini-1.5-pro',
+          useFallback: data.useFallback !== undefined ? data.useFallback : true,
+          maxOutputTokens: data.maxOutputTokens || 1000
+        });
+        setMaskedApiKey(data.hasApiKey ? '******' : '');
+        setStatusMessage('Configuration refreshed successfully')
         setErrorDetails('')
         setConfigSaved(false)
       })
       .catch(err => {
         console.error('Failed to load config:', err)
-        setMessage('Failed to load current configuration')
+        setStatusMessage('Failed to load current configuration')
         setErrorDetails(err.message || 'Unknown error')
       })
       .finally(() => {
@@ -91,29 +155,35 @@ function AdminContent() {
   }, []);
 
   const saveConfig = async () => {
+    // Validate before saving
+    if (!validateConfig()) {
+      setStatusMessage('Please fix the validation errors before saving');
+      return;
+    }
+    
     setLoading(true)
-    setMessage('')
+    setStatusMessage('')
     setErrorDetails('')
     setConfigSaved(false)
     
     try {
-      console.log('Saving config with system prompt length:', systemPrompt.length)
+      console.log('Saving config with system prompt length:', config.systemPrompt.length)
       
       const payload: any = { 
-        systemPrompt,
-        fallbackModel,
-        useFallback,
-        maxOutputTokens: parseInt(maxOutputTokens, 10)
+        systemPrompt: config.systemPrompt,
+        fallbackModel: config.fallbackModel,
+        useFallback: config.useFallback,
+        maxOutputTokens: config.maxOutputTokens
       };
       
       // Only include API key if it was provided
-      if (apiKey) {
-        payload.apiKey = apiKey;
+      if (apiKeyInput) {
+        payload.apiKey = apiKeyInput;
       }
       
       console.log('Saving configuration with payload:', { 
         ...payload, 
-        apiKey: apiKey ? '[API KEY PROVIDED]' : '[NO API KEY PROVIDED]' 
+        apiKey: apiKeyInput ? '[API KEY PROVIDED]' : '[NO API KEY PROVIDED]' 
       });
       
       const res = await fetch('/api/admin/config', {
@@ -125,9 +195,11 @@ function AdminContent() {
       const data = await res.json()
       
       if (res.ok && data.success) {
-        setMessage(data.message || 'Configuration saved successfully!')
-        setApiKey('') // Clear API key field after saving
-        setShowVercelInfo(true) // Show Vercel info when saving succeeds
+        setStatusMessage(data.message || 'Configuration saved successfully!')
+        // Clear API key field after saving
+        setApiKeyInput('')
+        setMaskedApiKey(apiKeyInput ? '******' : maskedApiKey);
+        setShowVercelInfo(!!data.isEphemeral) // Only show warning for ephemeral changes
         setConfigSaved(true)
         
         // Update debug info after saving
@@ -139,12 +211,12 @@ function AdminContent() {
         }
       } else {
         console.error('API error response:', data)
-        setMessage(`Failed to save configuration: ${data.error || 'Unknown error'}`)
+        setStatusMessage(`Failed to save configuration: ${data.error || 'Unknown error'}`)
         setErrorDetails(JSON.stringify(data, null, 2))
       }
     } catch (error) {
       console.error('Error saving config:', error)
-      setMessage('Error saving configuration')
+      setStatusMessage('Error saving configuration')
       setErrorDetails(error instanceof Error ? error.message : 'Unknown error')
     } finally {
       setLoading(false)
@@ -156,7 +228,7 @@ function AdminContent() {
       <div className="mb-8 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Link 
-            href={`/?key=${keyParam || ''}`} 
+            href="/" 
             className="text-blue-500 hover:text-blue-400 flex items-center gap-1"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -201,7 +273,7 @@ function AdminContent() {
                 <p><strong>Config File Exists:</strong> {debugInfo.hasConfigFile ? 'Yes' : 'No'}</p>
                 <p><strong>Config Path:</strong> <code className="text-xs">{debugInfo.configPath}</code></p>
                 <p>
-                  <strong>Auth Key:</strong> {keyParam ? 
+                  <strong>Auth Key:</strong> {user ? 
                     <span className="text-green-400">Provided ✓</span> : 
                     <span className="text-red-400">Missing ✗</span>}
                 </p>
@@ -212,6 +284,42 @@ function AdminContent() {
           )}
         </CardContent>
       </Card>
+      
+      {/* Vercel Environment Warning */}
+      {debugInfo?.isVercel && (
+        <Card className="mb-6 bg-amber-900/20 border-amber-800/50">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-medium text-amber-300 mb-1">Production Environment Warning</h3>
+                <p className="text-sm text-amber-200/80 mb-2">
+                  You are making changes in a <strong>Vercel serverless environment</strong>. Any configuration changes made here 
+                  will only affect the current serverless function instance and will be lost when:
+                </p>
+                <ul className="text-sm text-amber-200/80 list-disc pl-5 mb-2 space-y-1">
+                  <li>The function "cold starts" after inactivity</li>
+                  <li>A new deployment is made</li>
+                  <li>Vercel scales your application to multiple instances</li>
+                </ul>
+                <p className="text-sm text-amber-200/80 font-medium">
+                  For permanent configuration changes, set environment variables in the{" "}
+                  <a 
+                    href="https://vercel.com/dashboard" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:underline"
+                    aria-label="Open Vercel Dashboard"
+                  >
+                    Vercel Dashboard
+                  </a>{" "}
+                  under Project Settings → Environment Variables.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       
       {/* Main Configuration Card */}
       <Card className="mb-6 bg-gray-900/50 border-gray-800">
@@ -225,8 +333,9 @@ function AdminContent() {
           <div>
             <label className="block text-sm font-medium mb-1">System Prompt</label>
             <Textarea
-              value={systemPrompt}
-              onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setSystemPrompt(e.target.value)}
+              value={config.systemPrompt}
+              onChange={(e: ChangeEvent<HTMLTextAreaElement>) => 
+                handleConfigChange('systemPrompt', e.target.value)}
               rows={6}
               placeholder="Enter the system prompt for the AI model..."
               className="w-full bg-gray-800 border-gray-700"
@@ -240,11 +349,17 @@ function AdminContent() {
             <label className="block text-sm font-medium mb-1">Gemini API Key (Optional)</label>
             <Input
               type="password"
-              value={apiKey}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setApiKey(e.target.value)}
+              value={apiKeyInput}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => 
+                setApiKeyInput(e.target.value)}
               placeholder="Enter a new API key to update..."
               className="w-full bg-gray-800 border-gray-700"
             />
+            {maskedApiKey && (
+              <p className="text-xs text-gray-400 mt-1">
+                Current key: {maskedApiKey}
+              </p>
+            )}
             <p className="text-xs text-gray-400 mt-1">
               Leave blank to keep the current API key. Get a key from <a href="https://makersuite.google.com/app/apikey" className="text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer">Google MakerSuite</a>.
             </p>
@@ -254,9 +369,11 @@ function AdminContent() {
             <div>
               <label className="block text-sm font-medium mb-1">Fallback Model</label>
               <select
-                value={fallbackModel}
-                onChange={(e: ChangeEvent<HTMLSelectElement>) => setFallbackModel(e.target.value)}
-                className="w-full p-2 rounded-md bg-gray-800 border border-gray-700 text-white"
+                className="w-full bg-gray-800 text-white rounded p-2 border border-gray-700"
+                aria-label="Fallback Model Selection"
+                onChange={(e: ChangeEvent<HTMLSelectElement>) => 
+                  handleConfigChange('fallbackModel', e.target.value)}
+                value={config.fallbackModel}
               >
                 <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
                 <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
@@ -270,12 +387,20 @@ function AdminContent() {
               <label className="block text-sm font-medium mb-1">Max Output Tokens</label>
               <Input
                 type="number"
-                value={maxOutputTokens}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setMaxOutputTokens(e.target.value)}
+                value={config.maxOutputTokens.toString()}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => 
+                  handleConfigChange('maxOutputTokens', parseInt(e.target.value, 10) || 0)}
                 min="100"
                 max="8192"
-                className="w-full bg-gray-800 border-gray-700"
+                className={`w-full bg-gray-800 border-gray-700 ${
+                  validationErrors.maxOutputTokens ? 'border-red-500' : ''
+                }`}
               />
+              {validationErrors.maxOutputTokens && (
+                <p className="text-xs text-red-400 mt-1">
+                  {validationErrors.maxOutputTokens}
+                </p>
+              )}
               <p className="text-xs text-gray-400 mt-1">
                 Maximum length of AI responses (100-8192).
               </p>
@@ -285,8 +410,9 @@ function AdminContent() {
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={useFallback}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => setUseFallback(e.target.checked)}
+                  checked={config.useFallback}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => 
+                    handleConfigChange('useFallback', e.target.checked)}
                   className="h-4 w-4 rounded border-gray-700 bg-gray-800 text-blue-600"
                 />
                 <span>Enable model fallback (recommended)</span>
@@ -299,11 +425,11 @@ function AdminContent() {
         </CardContent>
         <CardFooter className="flex justify-between border-t border-gray-800 pt-4">
           <div>
-            {message && (
+            {statusMessage && (
               <div className={`flex items-start gap-2 text-sm ${configSaved ? 'text-green-400' : 'text-red-400'}`}>
                 {configSaved ? <CheckCircle className="h-4 w-4 mt-0.5" /> : <AlertTriangle className="h-4 w-4 mt-0.5" />}
                 <div>
-                  <p>{message}</p>
+                  <p>{statusMessage}</p>
                   {errorDetails && <pre className="mt-1 text-xs overflow-auto max-h-24 p-1 bg-gray-800 rounded">{errorDetails}</pre>}
                 </div>
               </div>
@@ -311,7 +437,7 @@ function AdminContent() {
           </div>
           <Button 
             onClick={saveConfig} 
-            disabled={loading}
+            disabled={loading || Object.keys(validationErrors).length > 0}
             className="bg-blue-600 hover:bg-blue-500 text-white"
           >
             {loading ? 'Saving...' : 'Save Configuration'}
@@ -370,9 +496,9 @@ function AdminContent() {
               
               <p>
                 <strong>Key Parameter:</strong>{' '}
-                {keyParam ? (
+                {user ? (
                   <code className="text-xs bg-gray-800 px-1 py-0.5 rounded">
-                    {keyParam.substring(0, 3)}***{keyParam.substring(keyParam.length - 3)}
+                    {user.id.substring(0, 3)}***{user.id.substring(user.id.length - 3)}
                   </code>
                 ) : (
                   <span className="text-red-400">Not provided</span>
@@ -397,8 +523,32 @@ function AdminContent() {
   )
 }
 
-// Wrap the component with Suspense
+// Main admin page component that uses Clerk auth
 export default function AdminPage() {
+  const { isLoaded, user } = useUser()
+  const router = useRouter()
+  
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (isLoaded && !user) {
+      router.push('/')
+    }
+  }, [isLoaded, user, router])
+  
+  // Show loading while checking authentication
+  if (!isLoaded) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
+  
+  // If user isn't authenticated, don't show content
+  if (!user) {
+    return null
+  }
+  
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-950 to-blue-950 text-white">
       <header className="border-b border-blue-900/30 bg-gray-900/70 backdrop-blur-sm p-4">

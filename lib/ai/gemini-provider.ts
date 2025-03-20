@@ -10,6 +10,9 @@ export const geminiModel = "gemini-2.0-flash-thinking-exp-01-21"; // Using the c
 // Fallback model in case the primary model isn't available
 export const fallbackModel = "gemini-1.5-pro";
 
+// Additional fallback if both models fail
+export const ultimateFallbackModel = "gemini-1.0-pro";
+
 /**
  * Gets the API key from config file or falls back to environment variable
  * Logs helpful messages if API key is not found
@@ -81,19 +84,46 @@ export async function generateContentWithGemini(prompt: string) {
     throw new Error('API key not configured. Please set the GEMINI_API_KEY environment variable.');
   }
   
-  try {
-    const model = getGeminiModel();
-    console.log(`Using Gemini model: ${model}`);
-    const genModel = freshClient.getGenerativeModel({ model });
-    const result = await genModel.generateContent(prompt);
-    return result.response.text();
-  } catch (error: any) {
-    console.error(`Error with primary model: ${error.message}`);
-    console.log(`Falling back to ${fallbackModel}`);
-    
-    // Try with fallback model
-    const genModel = freshClient.getGenerativeModel({ model: fallbackModel });
-    const result = await genModel.generateContent(prompt);
-    return result.response.text();
+  // Add health disclaimer to all prompts
+  const promptWithDisclaimer = 
+    `${prompt}\n\nYour response must include a disclaimer that this is AI-generated content for ` +
+    `educational purposes only and should not be considered medical advice. Always consult with ` +
+    `healthcare professionals for interpreting health information and making medical decisions.`;
+  
+  let attempts = 0;
+  const maxAttempts = 3;
+  
+  while (attempts < maxAttempts) {
+    attempts++;
+    try {
+      // Select the appropriate model based on the attempt number
+      let modelToUse: string;
+      if (attempts === 1) {
+        modelToUse = getGeminiModel();
+      } else if (attempts === 2) {
+        modelToUse = fallbackModel;
+      } else {
+        modelToUse = ultimateFallbackModel;
+      }
+      
+      console.log(`Attempt ${attempts}: Using Gemini model: ${modelToUse}`);
+      
+      const genModel = freshClient.getGenerativeModel({ model: modelToUse });
+      const result = await genModel.generateContent(promptWithDisclaimer);
+      return result.response.text();
+    } catch (error: any) {
+      console.error(`Error with attempt ${attempts}: ${error.message}`);
+      
+      // If we've tried all models and still failed, throw an error
+      if (attempts === maxAttempts) {
+        throw new Error(`All model attempts failed. Last error: ${error.message}`);
+      }
+      
+      // Otherwise continue to the next attempt with the fallback model
+      console.log(`Falling back to next model attempt...`);
+    }
   }
+  
+  // This shouldn't be reached due to the error throw above, but TypeScript requires a return
+  throw new Error('Unexpected error: All model attempts failed without throwing an error');
 } 

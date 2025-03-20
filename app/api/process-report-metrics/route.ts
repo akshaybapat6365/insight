@@ -5,6 +5,16 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { loadConfig } from '@/lib/config';
 import { getGeminiModel, fallbackModel } from '@/lib/ai/gemini-provider';
 
+// Set consistent file size limit
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
+  },
+  maxDuration: 60, // Increase timeout for file processing
+};
+
 // Allowed file types
 const allowedTypes = [
   'application/pdf',
@@ -21,7 +31,7 @@ Extract all health metrics from the report and structure them as a JSON array.
 
 For each metric:
 - name: The name of the metric (e.g., "Glucose", "LDL Cholesterol")
-- value: The numeric value
+- value: The numeric value - this MUST be a number without text or units
 - unit: The unit of measurement (e.g., "mg/dL", "mmol/L")
 - range: The reference range if provided (e.g., "70-99", "<100")
 - status: Whether the value is "normal", "high", or "low" based on the reference range
@@ -31,41 +41,118 @@ IMPORTANT:
 - Only include metrics that have clear numeric values
 - Include all relevant health metrics present in the report
 - Format your response as a valid JSON array of objects
+- Ensure "value" is always a number type, not a string
 `;
+
+// Interface for health metric
+interface HealthMetric {
+  name: string;
+  value: number; 
+  unit: string;
+  range?: string;
+  status?: 'normal' | 'high' | 'low';
+}
+
+// Validate metrics
+function validateMetrics(metrics: any[]): { valid: boolean; cleanedMetrics?: Record<string, any>; error?: string } {
+  if (!Array.isArray(metrics)) {
+    return { valid: false, error: 'Metrics must be an array' };
+  }
+  
+  if (metrics.length === 0) {
+    return { valid: false, error: 'No metrics found in the report' };
+  }
+  
+  const cleanedMetrics: Record<string, any> = {};
+  const errors: string[] = [];
+  
+  metrics.forEach((metric, index) => {
+    // Check required fields
+    if (!metric.name) {
+      errors.push(`Metric at index ${index} is missing a name`);
+      return;
+    }
+    
+    // Ensure value is a number
+    const numericValue = Number(metric.value);
+    if (isNaN(numericValue)) {
+      errors.push(`Value for "${metric.name}" is not a valid number`);
+      return;
+    }
+    
+    // Clean and normalize the metric
+    cleanedMetrics[metric.name] = {
+      value: numericValue,
+      unit: metric.unit || '',
+      normalRange: metric.range || '',
+      status: ['normal', 'high', 'low'].includes(metric.status?.toLowerCase()) 
+        ? metric.status.toLowerCase() 
+        : 'normal'
+    };
+  });
+  
+  if (Object.keys(cleanedMetrics).length === 0) {
+    return { 
+      valid: false, 
+      error: errors.length > 0 
+        ? `Validation errors: ${errors.join(', ')}` 
+        : 'No valid metrics could be extracted'
+    };
+  }
+  
+  return { valid: true, cleanedMetrics };
+}
 
 export async function POST(req: Request) {
   try {
-    // Check if form data
-    const formData = await req.formData();
-    const file = formData.get('file') as File;
+    // Parse the request
+    let content: string;
     
-    if (!file) {
-      return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
-    }
+    // Check if we're processing JSON content directly
+    const contentType = req.headers.get('content-type');
     
-    // Validate file type
-    if (!allowedTypes.includes(file.type)) {
-      return NextResponse.json({ 
-        error: 'Invalid file type. Please upload a PDF, TXT, CSV, or Excel file' 
-      }, { status: 400 });
-    }
-    
-    // For this MVP, we'll just extract the text content from the file
-    // In a production app, you'd want more sophisticated file parsing
-    let content = '';
-    
-    if (file.type === 'application/pdf') {
-      // For PDFs, read as arrayBuffer and use pdf-parse in a real implementation
-      content = await file.text(); // Simplified for MVP
+    if (contentType?.includes('application/json')) {
+      // Process JSON payload
+      const jsonData = await req.json();
+      
+      if (!jsonData.content || typeof jsonData.content !== 'string') {
+        return NextResponse.json({ 
+          error: 'Invalid request: missing content field in JSON payload' 
+        }, { status: 400 });
+      }
+      
+      content = jsonData.content;
     } else {
-      // For text-based files, just read as text
-      content = await file.text();
+      // Process form data with file
+      const formData = await req.formData();
+      const file = formData.get('file') as File;
+      
+      if (!file) {
+        return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
+      }
+      
+      // Validate file type
+      if (!allowedTypes.includes(file.type)) {
+        return NextResponse.json({ 
+          error: `Invalid file type: ${file.type}. Please upload a PDF, TXT, CSV, or Excel file` 
+        }, { status: 400 });
+      }
+      
+      // For this MVP, we'll just extract the text content from the file
+      // In a production app, you'd want more sophisticated file parsing
+      if (file.type === 'application/pdf') {
+        // For PDFs, read as arrayBuffer and use pdf-parse in a real implementation
+        content = await file.text(); // Simplified for MVP
+      } else {
+        // For text-based files, just read as text
+        content = await file.text();
+      }
     }
     
     // Ensure we have some content to process
     if (!content || content.trim().length < 10) {
       return NextResponse.json({ 
-        error: 'The uploaded file contains no readable text or is too short' 
+        error: 'The provided content contains no readable text or is too short' 
       }, { status: 400 });
     }
     
@@ -108,10 +195,21 @@ export async function POST(req: Request) {
       // Try to parse the response as JSON
       try {
         // The model should return a JSON array
-        const metrics = JSON.parse(responseText);
+        const metricsArray = JSON.parse(responseText);
+        
+        // Validate and normalize the metrics
+        const validation = validateMetrics(metricsArray);
+        
+        if (!validation.valid) {
+          return NextResponse.json({ 
+            error: validation.error || 'Invalid metrics format',
+            rawResponse: responseText,
+            success: false 
+          }, { status: 422 });
+        }
         
         return NextResponse.json({ 
-          metrics,
+          metrics: validation.cleanedMetrics,
           success: true 
         });
       } catch (jsonError) {
@@ -137,7 +235,7 @@ export async function POST(req: Request) {
             { 
               role: "user", 
               parts: [{ 
-                text: `Extract health metrics from this text and return as JSON: ${content}`
+                text: `Extract health metrics from this text and return as JSON array with numeric values for each metric: ${content}`
               }]
             }
           ],
@@ -150,11 +248,32 @@ export async function POST(req: Request) {
         const fallbackResponse = fallbackResult.response;
         const fallbackText = fallbackResponse.text();
         
-        return NextResponse.json({ 
-          rawResponse: fallbackText,
-          fallback: true,
-          success: false
-        });
+        // Try to parse fallback response
+        try {
+          const fallbackMetrics = JSON.parse(fallbackText);
+          const validation = validateMetrics(fallbackMetrics);
+          
+          if (validation.valid) {
+            return NextResponse.json({ 
+              metrics: validation.cleanedMetrics,
+              fallback: true,
+              success: true
+            });
+          } else {
+            return NextResponse.json({ 
+              rawResponse: fallbackText,
+              error: validation.error,
+              fallback: true,
+              success: false
+            });
+          }
+        } catch (fallbackJsonError) {
+          return NextResponse.json({ 
+            rawResponse: fallbackText,
+            fallback: true,
+            success: false
+          });
+        }
       } catch (fallbackError) {
         console.error('Fallback model error:', fallbackError);
         return NextResponse.json({ 

@@ -1,7 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { loadConfig, saveConfig, getEnvironmentInfo } from '@/lib/config'
+import { auth } from '@clerk/nextjs'
+
+// Check if user is an admin
+async function isAdmin(userId: string | null) {
+  if (!userId) return false;
+  
+  // Check if the user ID matches the admin ID from environment variables
+  // This should be set in your environment variables
+  const adminUserId = process.env.ADMIN_USER_ID;
+  
+  if (adminUserId && userId === adminUserId) {
+    return true;
+  }
+  
+  // Alternative: Check for admin role in Clerk user metadata
+  // This approach requires setting up custom user metadata in Clerk
+  try {
+    // Add your logic to check if the user has admin role
+    // Example: use Clerk's API to fetch user metadata
+    return false; // Replace with actual admin check
+  } catch (error) {
+    console.error('Error checking admin status:', error);
+    return false;
+  }
+}
 
 export async function GET() {
+  // Get auth session from Clerk
+  const { userId } = auth();
+  
+  // Check if user is authenticated and is an admin
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized - Not authenticated' }, { status: 401 });
+  }
+  
+  const isUserAdmin = await isAdmin(userId);
+  if (!isUserAdmin) {
+    return NextResponse.json({ error: 'Unauthorized - Not an admin' }, { status: 403 });
+  }
+  
   // Get the current configuration
   const config = loadConfig();
   const envInfo = getEnvironmentInfo();
@@ -18,6 +56,19 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    // Get auth session from Clerk
+    const { userId } = auth();
+    
+    // Check if user is authenticated and is an admin
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized - Not authenticated' }, { status: 401 });
+    }
+    
+    const isUserAdmin = await isAdmin(userId);
+    if (!isUserAdmin) {
+      return NextResponse.json({ error: 'Unauthorized - Not an admin' }, { status: 403 });
+    }
+    
     const body = await request.json();
     
     // Create an update object with only the fields that were provided

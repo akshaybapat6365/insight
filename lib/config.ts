@@ -37,24 +37,28 @@ export function loadConfig(): AppConfig {
     }
   }
   
-  // Create merged config with environment variables taking precedence
+  // Create merged config with environment variables ALWAYS taking precedence
   const config: AppConfig = {
-    // Load from file config or use defaults
-    systemPrompt: fileConfig.systemPrompt || "You are a health analysis assistant that helps users understand their bloodwork and medical reports.",
-    fallbackModel: fileConfig.fallbackModel || "gemini-1.5-pro",
-    useFallback: fileConfig.useFallback !== undefined ? fileConfig.useFallback : true,
-    maxOutputTokens: fileConfig.maxOutputTokens || 1000,
+    // Default values
+    systemPrompt: "You are a health analysis assistant that helps users understand their bloodwork and medical reports.",
+    fallbackModel: "gemini-1.5-pro",
+    useFallback: true,
+    maxOutputTokens: 1000,
     
-    // Environment variables override file config
+    // File config overrides defaults (only if not on Vercel)
+    ...((!isVercel && fileConfig) || {}),
+    
+    // Environment variables ALWAYS override file config
     ...process.env.SYSTEM_PROMPT ? { systemPrompt: process.env.SYSTEM_PROMPT } : {},
     ...process.env.GEMINI_API_KEY ? { apiKey: process.env.GEMINI_API_KEY } : {},
     ...process.env.DEFAULT_GEMINI_MODEL ? { fallbackModel: process.env.DEFAULT_GEMINI_MODEL } : {},
     ...process.env.USE_FALLBACK_MODEL ? { useFallback: process.env.USE_FALLBACK_MODEL === 'true' } : {},
+    ...process.env.MAX_OUTPUT_TOKENS ? { maxOutputTokens: parseInt(process.env.MAX_OUTPUT_TOKENS, 10) } : {},
   };
   
-  // If file config had apiKey and we didn't get one from env, use that
-  if (!config.apiKey && fileConfig.apiKey) {
-    config.apiKey = fileConfig.apiKey;
+  // Ensure we have an API key - critical for operation
+  if (!config.apiKey) {
+    console.warn('No API key found in environment variables or config file');
   }
   
   return config;
@@ -64,7 +68,7 @@ export function loadConfig(): AppConfig {
  * Save configuration to file system
  * Note: In serverless environments, this might not persist between invocations
  */
-export async function saveConfig(newConfig: Partial<AppConfig>): Promise<{success: boolean, message: string}> {
+export async function saveConfig(newConfig: Partial<AppConfig>): Promise<{success: boolean, message: string, isEphemeral?: boolean}> {
   try {
     // If on Vercel, only update environment variables for current instance
     // but don't try to write to filesystem
@@ -86,9 +90,14 @@ export async function saveConfig(newConfig: Partial<AppConfig>): Promise<{succes
         process.env.USE_FALLBACK_MODEL = newConfig.useFallback ? 'true' : 'false';
       }
       
+      if (newConfig.maxOutputTokens !== undefined) {
+        process.env.MAX_OUTPUT_TOKENS = newConfig.maxOutputTokens.toString();
+      }
+      
       return {
         success: true,
-        message: 'Configuration applied to current instance. Note: On Vercel, changes will only persist until the serverless function restarts. For permanent changes, set environment variables in the Vercel dashboard.'
+        isEphemeral: true,
+        message: 'Configuration applied to current instance. IMPORTANT: On Vercel, changes will NOT persist after the serverless function restarts. For permanent changes, set environment variables in the Vercel dashboard.'
       };
     }
     
@@ -127,6 +136,10 @@ export async function saveConfig(newConfig: Partial<AppConfig>): Promise<{succes
       process.env.USE_FALLBACK_MODEL = newConfig.useFallback ? 'true' : 'false';
     }
     
+    if (newConfig.maxOutputTokens !== undefined) {
+      process.env.MAX_OUTPUT_TOKENS = newConfig.maxOutputTokens.toString();
+    }
+    
     // Save config to file
     try {
       fs.writeFileSync(CONFIG_FILE_PATH, JSON.stringify(mergedConfig, null, 2), 'utf8');
@@ -134,6 +147,7 @@ export async function saveConfig(newConfig: Partial<AppConfig>): Promise<{succes
       
       return {
         success: true,
+        isEphemeral: false,
         message: 'Configuration saved successfully and applied to the current instance.'
       };
     } catch (writeError) {

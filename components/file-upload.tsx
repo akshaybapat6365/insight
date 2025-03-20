@@ -4,6 +4,20 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Upload, FileText, AlertCircle, FileType, FileCheck, RefreshCw } from 'lucide-react'
 
+const widthClasses: Record<number, string> = {
+  0: 'w-[0%]',
+  10: 'w-[10%]',
+  20: 'w-[20%]',
+  30: 'w-[30%]',
+  40: 'w-[40%]',
+  50: 'w-[50%]',
+  60: 'w-[60%]',
+  70: 'w-[70%]',
+  80: 'w-[80%]',
+  90: 'w-[90%]',
+  100: 'w-[100%]'
+};
+
 export function FileUpload({ onFileProcessed }: { onFileProcessed: (text: string) => void }) {
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState('')
@@ -14,11 +28,34 @@ export function FileUpload({ onFileProcessed }: { onFileProcessed: (text: string
     const file = e.target.files?.[0]
     if (!file) return
     
-    // Check file type
-    const validTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/csv']
-    if (!validTypes.includes(file.type)) {
-      setError(`Unsupported file type: ${file.type}. Please upload a PDF, JPEG, PNG, or Excel/CSV file`)
-      return
+    // Reset previous errors and state
+    setError('')
+    setUploadProgress(null)
+    
+    // Improved file type detection combining MIME type and extension
+    const validTypes = [
+      'application/pdf', 
+      'image/jpeg', 
+      'image/jpg', 
+      'image/png', 
+      'application/vnd.ms-excel', 
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
+      'text/csv',
+      'text/plain',
+      'application/octet-stream' // For some systems that don't properly set MIME types
+    ];
+    
+    // Get file extension
+    const fileExtension = file.name.split('.').pop()?.toLowerCase() || '';
+    const validExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'xls', 'xlsx', 'csv', 'txt'];
+    
+    // Check if either MIME type or extension is valid
+    if (!validTypes.includes(file.type) && !validExtensions.includes(fileExtension)) {
+      setError(
+        `Unsupported file type: ${file.type} (.${fileExtension}). ` +
+        `Please upload a PDF, JPEG, PNG, Excel/CSV file or text file.`
+      );
+      return;
     }
 
     // Check file size (10MB max)
@@ -36,7 +73,6 @@ export function FileUpload({ onFileProcessed }: { onFileProcessed: (text: string
     })
     
     setIsUploading(true)
-    setError('')
     setUploadProgress(0)
     
     try {
@@ -105,7 +141,12 @@ export function FileUpload({ onFileProcessed }: { onFileProcessed: (text: string
         console.log('File processed successfully')
         
         if (onFileProcessed && data.text) {
-          onFileProcessed(data.text)
+          // Add health disclaimer to the processed text
+          const textWithDisclaimer = 
+            `${data.text}\n\n---\nDISCLAIMER: This AI analysis is for informational purposes only and does not constitute medical advice. ` +
+            `Always consult with qualified healthcare professionals for interpreting health data and making medical decisions.`;
+            
+          onFileProcessed(textWithDisclaimer)
         } else {
           throw new Error('No text was extracted from the file. Please try a different file.')
         }
@@ -161,9 +202,8 @@ export function FileUpload({ onFileProcessed }: { onFileProcessed: (text: string
         {/* Progress bar for upload */}
         {uploadProgress !== null && (
           <div className="w-full h-2 bg-gray-900 rounded-full mb-4 overflow-hidden">
-            <div 
-              className="h-full bg-gray-600 rounded-full transition-all duration-300 ease-out"
-              style={{ width: `${uploadProgress}%` }}
+            <div
+              className={`h-full bg-gray-600 rounded-full transition-all duration-300 ease-out ${widthClasses[uploadProgress]}`}
             ></div>
           </div>
         )}
@@ -195,6 +235,7 @@ export function FileUpload({ onFileProcessed }: { onFileProcessed: (text: string
             <div>
               <p className="font-medium">File Processed Successfully</p>
               <p className="text-xs mt-1">{fileInfo.name} • {(fileInfo.size / 1024).toFixed(1)} KB</p>
+              <p className="text-xs mt-1 text-gray-500">DISCLAIMER: Analysis is for informational purposes only, not medical advice.</p>
             </div>
           </div>
         )}
@@ -217,10 +258,10 @@ export function FileUpload({ onFileProcessed }: { onFileProcessed: (text: string
             </div>
           </label>
           <p className="text-xs text-gray-600 mt-2 text-center">
-            Supports PDF, JPEG, PNG, Excel/CSV • Max 10MB
+            Supports PDF, JPEG, PNG, Excel/CSV, TXT • Max 10MB
           </p>
         </div>
       </div>
     </div>
   )
-} 
+}

@@ -3,9 +3,53 @@ export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { saveChat } from '@/lib/services/chat-service';
+import { saveChat } from '@/lib/services/unified-chat-service';
+import { loadConfig } from '@/lib/config';
 
-const systemPrompt = `
+// Set maximum duration for API route (60 seconds)
+export const maxDuration = 60;
+
+// Rate limiting implementation
+const RATE_LIMIT_MAX = 30; // Maximum requests per window
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute window
+
+// Simple in-memory rate limiting store (use Redis in production)
+const rateLimitStore: Record<string, { count: number, resetAt: number }> = {};
+
+// Rate limiting function
+function checkRateLimit(identifier: string): { limited: boolean, resetIn?: number } {
+  const now = Date.now();
+  const userRateLimit = rateLimitStore[identifier];
+  
+  // If no existing rate limit or window expired, create new entry
+  if (!userRateLimit || userRateLimit.resetAt < now) {
+    rateLimitStore[identifier] = { count: 1, resetAt: now + RATE_LIMIT_WINDOW };
+    return { limited: false };
+  }
+  
+  // If under limit, increment
+  if (userRateLimit.count < RATE_LIMIT_MAX) {
+    userRateLimit.count++;
+    return { limited: false };
+  }
+  
+  // Rate limited
+  return { 
+    limited: true, 
+    resetIn: Math.ceil((userRateLimit.resetAt - now) / 1000) 
+  };
+}
+
+// Load system prompt from configuration
+const getSystemPrompt = (): string => {
+  // First try to get from configuration
+  const config = loadConfig();
+  if (config.systemPrompt) {
+    return config.systemPrompt;
+  }
+  
+  // Fallback to default system prompt
+  return `
 You are Health Insights AI, a specialized health education assistant focused on helping users understand health concepts, medical information, and wellness strategies. Your primary goals are:
 
 1. Provide evidence-based health information and explanations
@@ -25,34 +69,75 @@ IMPORTANT GUIDELINES:
 - Clearly explain complex health concepts in accessible language.
 - Acknowledge the limitations of your knowledge, especially regarding very recent medical developments.
 `;
+};
 
 export async function POST(req: Request) {
   try {
+    // Apply rate limiting by IP and user ID
+    let identifier = "anonymous";
+    
+    // Get IP address for rate limiting
+    const ip = req.headers.get("x-forwarded-for") || 
+              req.headers.get("x-real-ip") || 
+              "unknown-ip";
+    
     const body = await req.json();
     const { messages, chatId, userId } = body;
+    
+    // Use user ID if available, otherwise use IP
+    if (userId) {
+      identifier = userId;
+    } else {
+      identifier = `ip-${ip}`;
+    }
+    
+    // Apply rate limiting
+    const rateLimitResult = checkRateLimit(identifier);
+    if (rateLimitResult.limited) {
+      return NextResponse.json(
+        { 
+          error: `Rate limit exceeded. Please try again in ${rateLimitResult.resetIn} seconds.` 
+        }, 
+        { 
+          status: 429,
+          headers: {
+            'Retry-After': `${rateLimitResult.resetIn}`,
+            'X-RateLimit-Limit': `${RATE_LIMIT_MAX}`,
+            'X-RateLimit-Reset-In': `${rateLimitResult.resetIn}`
+          } 
+        }
+      );
+    }
 
     // Validate messages format
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: "Invalid messages format" }, { status: 400 });
     }
 
-    // Ensure API key is configured
-    const apiKey = process.env.GOOGLE_API_KEY;
+    // Ensure API key is configured - try from config and fallback to env var
+    const config = loadConfig();
+    const apiKey = config.apiKey || process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.error("GOOGLE_API_KEY is not configured");
+      console.error("GEMINI_API_KEY is not configured");
       return NextResponse.json(
-        { error: "API key not configured" },
+        { error: "API key not configured. Please set the GEMINI_API_KEY environment variable or configure it in the admin console." },
         { status: 500 }
       );
     }
+
+    // Get system prompt from configuration
+    const systemPrompt = getSystemPrompt();
 
     // Initialize the Gemini API client
     const genAI = new GoogleGenerativeAI(apiKey);
 
     try {
-      // Try the primary model first (gemini-1.5-flash)
+      // Get model from configuration or use default
+      const configuredModel = config.fallbackModel || "gemini-1.5-flash";
+      
+      // Try the primary model first (or configured model)
       try {
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: configuredModel });
 
         const result = await model.generateContent({
           contents: [
@@ -66,7 +151,7 @@ export async function POST(req: Request) {
             temperature: 0.7,
             topK: 40,
             topP: 0.95,
-            maxOutputTokens: 2048,
+            maxOutputTokens: config.maxOutputTokens || 2048,
           },
         });
 
@@ -94,8 +179,16 @@ export async function POST(req: Request) {
       } catch (primaryModelError) {
         console.log("Primary model error:", primaryModelError);
         
+        // Check if fallback is enabled in configuration
+        if (config.useFallback === false) {
+          throw primaryModelError; // Do not fallback if disabled
+        }
+        
         // Fallback to gemini-pro model
-        const fallbackModel = genAI.getGenerativeModel({ model: "gemini-pro" });
+        const fallbackModelName = "gemini-pro"; // Most reliable fallback
+        const fallbackModel = genAI.getGenerativeModel({ model: fallbackModelName });
+        
+        console.log(`Falling back to ${fallbackModelName}`);
         
         const result = await fallbackModel.generateContent({
           contents: [
@@ -109,7 +202,7 @@ export async function POST(req: Request) {
             temperature: 0.7,
             topK: 40,
             topP: 0.95,
-            maxOutputTokens: 2048,
+            maxOutputTokens: config.maxOutputTokens || 2048,
           },
         });
 
@@ -133,19 +226,35 @@ export async function POST(req: Request) {
           }
         }
 
-        return NextResponse.json({ role: "assistant", content: text });
+        return NextResponse.json({ 
+          role: "assistant", 
+          content: text,
+          model: fallbackModelName,
+          fallback: true
+        });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error generating response:", error);
+      
+      // Provide a user-friendly error message
+      let errorMessage = "Failed to generate a response. Please try again later.";
+      
+      // Include more details for development
+      if (process.env.NODE_ENV === "development") {
+        errorMessage += ` Error: ${error.message || "Unknown error"}`;
+      }
+      
       return NextResponse.json(
-        { error: "Failed to generate response" },
+        { error: errorMessage },
         { status: 500 }
       );
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error processing request:", error);
+    
+    // Provide a generic error message
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Something went wrong. Please try again later." },
       { status: 500 }
     );
   }
