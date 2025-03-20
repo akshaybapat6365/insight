@@ -1,3 +1,6 @@
+// Specify Node.js runtime to ensure compatibility with Prisma
+export const runtime = 'nodejs';
+
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { loadConfig } from '@/lib/config';
