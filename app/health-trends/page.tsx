@@ -85,7 +85,8 @@ export default function HealthTrends() {
       if (data.metrics && Object.keys(data.metrics).length > 0) {
         setSelectedMetrics(prev => {
           const newMetrics = Object.keys(data.metrics);
-          return [...new Set([...prev, ...newMetrics])];
+          const uniqueMetrics = new Set([...prev, ...newMetrics]);
+          return Array.from(uniqueMetrics);
         });
       }
     } catch (err: any) {
