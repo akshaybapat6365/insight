@@ -1,3 +1,6 @@
+// Adding Node.js runtime configuration at the top
+export const runtime = 'nodejs';
+
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { auth } from './auth'
