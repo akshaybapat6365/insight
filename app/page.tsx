@@ -1,3 +1,6 @@
+// Specify Node.js runtime to ensure compatibility with Prisma and NextAuth
+export const runtime = 'nodejs';
+
 'use client';
 
 import { useState } from 'react';
