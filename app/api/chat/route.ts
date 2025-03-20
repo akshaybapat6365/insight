@@ -3,195 +3,149 @@ export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { geminiModel, fallbackModel, createFreshGeminiClient } from '@/lib/ai/gemini-provider';
 import { saveChat } from '@/lib/services/chat-service';
 
-// System prompt for the health assistant
-const SYSTEM_PROMPT = `You are a health education assistant that helps users understand their health data, lab results, and medical terminology.
+const systemPrompt = `
+You are Health Insights AI, a specialized health education assistant focused on helping users understand health concepts, medical information, and wellness strategies. Your primary goals are:
 
-Your primary goals are to:
-1. Provide clear, educational explanations about health metrics and medical terms
-2. Help users understand what their lab results might mean (only as educational content, not medical advice)
-3. Answer general health questions with scientific accuracy
-4. Always be respectful, compassionate, and mindful that health topics can be sensitive
+1. Provide evidence-based health information and explanations
+2. Help users understand medical concepts, terminology, and research
+3. Offer educational content about healthy lifestyle choices, prevention strategies, and wellness approaches
+4. Analyze general health data trends and explain their significance
+5. Suggest relevant health resources, studies, and reliable references
 
-Important guidelines:
-- NEVER diagnose conditions or provide personalized medical advice
-- Always clarify that you're providing educational information only, not medical advice
-- Recommend consulting healthcare professionals for specific medical concerns or diagnosis
-- Be precise when discussing medical concepts, but explain them in accessible language
-- When uncertain, acknowledge the limits of your knowledge rather than guessing
-- Maintain patient privacy and data security at all times
-- Provide evidence-based information and cite sources when appropriate
-- NEVER prescribe medications or suggest changing prescribed treatments
-- Always include a health disclaimer when interpreting lab data
-
-Remember: Your role is to educate, not to replace healthcare providers.`;
+IMPORTANT GUIDELINES:
+- You are educational only. Do not diagnose, prescribe treatments, or provide personalized medical advice.
+- Always clarify that users should consult qualified healthcare providers for personal medical decisions.
+- Present balanced information on health topics, including mainstream and evidence-based alternative approaches when relevant.
+- Be transparent about scientific consensus vs. emerging research.
+- Respect user privacy and emphasize that you do not store personal health information.
+- When discussing sensitive health topics, maintain a professional, non-judgmental approach.
+- Prioritize reputable sources from established medical institutions, peer-reviewed research, and recognized health authorities.
+- Clearly explain complex health concepts in accessible language.
+- Acknowledge the limitations of your knowledge, especially regarding very recent medical developments.
+`;
 
 export async function POST(req: Request) {
   try {
-    // Parse the request body
     const body = await req.json();
     const { messages, chatId, userId } = body;
 
-    // Validate input
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return NextResponse.json(
-        { error: 'Invalid messages format' },
-        { status: 400 }
-      );
+    // Validate messages format
+    if (!messages || !Array.isArray(messages)) {
+      return NextResponse.json({ error: "Invalid messages format" }, { status: 400 });
     }
 
-    // Get a fresh Gemini client
-    const genAI = createFreshGeminiClient();
-    if (!genAI) {
+    // Ensure API key is configured
+    const apiKey = process.env.GOOGLE_API_KEY;
+    if (!apiKey) {
+      console.error("GOOGLE_API_KEY is not configured");
       return NextResponse.json(
-        { error: 'API key not configured. Please add a valid Gemini API key in the admin console.' },
+        { error: "API key not configured" },
         { status: 500 }
       );
     }
 
-    // Configure AI settings
-    const modelName = geminiModel;
-    console.log(`Using model: ${modelName} for chat`);
-
-    // Map messages for Gemini API format
-    const historyMessages = messages.slice(0, -1);
-    const lastUserMessage = messages[messages.length - 1];
+    // Initialize the Gemini API client
+    const genAI = new GoogleGenerativeAI(apiKey);
 
     try {
-      // Create the chat model
-      const model = genAI.getGenerativeModel({ model: modelName });
-      
-      // Start a chat session
-      const chat = model.startChat({
-        history: historyMessages.map(msg => ({
-          role: msg.role === 'user' ? 'user' : 'model',
-          parts: [{ text: msg.content }]
-        })),
-        generationConfig: {
-          temperature: 0.5,
-          topP: 0.9,
-          topK: 40,
-          maxOutputTokens: 2048,
-        },
-      });
-
-      // Generate a response
-      const result = await chat.sendMessage(`${SYSTEM_PROMPT}\n\nUser: ${lastUserMessage.content}`);
-      const responseText = result.response.text();
-
-      // Create a response message object
-      const responseMessage = {
-        role: 'assistant',
-        content: responseText,
-        id: Date.now().toString()
-      };
-
-      // Save the chat to the database if user is authenticated
-      if (userId && chatId) {
-        try {
-          // Add the assistant's response to the messages array
-          const updatedMessages = [
-            ...messages,
-            responseMessage
-          ];
-          
-          await saveChat({
-            chatId,
-            userId,
-            messages: updatedMessages
-          });
-        } catch (saveError) {
-          console.error('Error saving chat:', saveError);
-          // Continue with the response even if saving fails
-        }
-      }
-
-      // Return the response
-      return NextResponse.json({
-        role: 'assistant',
-        content: responseText
-      });
-
-    } catch (error: any) {
-      console.error('Error with primary model:', error);
-      
+      // Try the primary model first (gemini-1.5-flash)
       try {
-        console.log(`Falling back to ${fallbackModel}`);
-        
-        // Try with fallback model
-        const fallbackModelInstance = genAI.getGenerativeModel({ model: fallbackModel });
-        
-        // Start a chat session with fallback model
-        const fallbackChat = fallbackModelInstance.startChat({
-          history: historyMessages.map(msg => ({
-            role: msg.role === 'user' ? 'user' : 'model',
-            parts: [{ text: msg.content }]
-          })),
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+        const result = await model.generateContent({
+          contents: [
+            { role: "user", parts: [{ text: systemPrompt }] },
+            ...messages.map((message: any) => ({
+              role: message.role === "user" ? "user" : "model",
+              parts: [{ text: message.content }],
+            })),
+          ],
           generationConfig: {
-            temperature: 0.5,
-            topP: 0.9,
+            temperature: 0.7,
             topK: 40,
+            topP: 0.95,
             maxOutputTokens: 2048,
           },
         });
 
-        // Generate a response with fallback model
-        const fallbackResult = await fallbackChat.sendMessage(`${SYSTEM_PROMPT}\n\nUser: ${lastUserMessage.content}`);
-        const fallbackResponseText = fallbackResult.response.text();
+        const response = result.response;
+        const text = response.text();
 
-        // Create a response message object
-        const fallbackResponseMessage = {
-          role: 'assistant',
-          content: fallbackResponseText,
-          id: Date.now().toString()
-        };
-
-        // Save the chat in the database if user is authenticated
-        if (userId && chatId) {
+        // Save chat in database if user is authenticated
+        if (userId) {
           try {
-            // Add the assistant's response to the messages array
-            const updatedMessages = [
-              ...messages,
-              fallbackResponseMessage
-            ];
-            
             await saveChat({
-              chatId,
               userId,
-              messages: updatedMessages
+              chatId,
+              messages: [
+                ...messages,
+                { role: "assistant", content: text }
+              ]
             });
-          } catch (saveError) {
-            console.error('Error saving chat with fallback model:', saveError);
-            // Continue with the response even if saving fails
+          } catch (error) {
+            console.error("Error saving chat:", error);
+            // Continue to return response even if saving fails
           }
         }
 
-        return NextResponse.json({
-          role: 'assistant',
-          content: fallbackResponseText,
-          fallback: true
-        });
+        return NextResponse.json({ role: "assistant", content: text });
+      } catch (primaryModelError) {
+        console.log("Primary model error:", primaryModelError);
         
-      } catch (fallbackError: any) {
-        console.error('Fallback model also failed:', fallbackError);
-        return NextResponse.json(
-          {
-            error: 'Failed to generate a response. Please try again later.',
-            errorDetails: error.message
+        // Fallback to gemini-pro model
+        const fallbackModel = genAI.getGenerativeModel({ model: "gemini-pro" });
+        
+        const result = await fallbackModel.generateContent({
+          contents: [
+            { role: "user", parts: [{ text: systemPrompt }] },
+            ...messages.map((message: any) => ({
+              role: message.role === "user" ? "user" : "model",
+              parts: [{ text: message.content }],
+            })),
+          ],
+          generationConfig: {
+            temperature: 0.7,
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: 2048,
           },
-          { status: 500 }
-        );
+        });
+
+        const response = result.response;
+        const text = response.text();
+
+        // Save chat in database if user is authenticated
+        if (userId) {
+          try {
+            await saveChat({
+              userId,
+              chatId,
+              messages: [
+                ...messages,
+                { role: "assistant", content: text }
+              ]
+            });
+          } catch (error) {
+            console.error("Error saving chat:", error);
+            // Continue to return response even if saving fails
+          }
+        }
+
+        return NextResponse.json({ role: "assistant", content: text });
       }
+    } catch (error) {
+      console.error("Error generating response:", error);
+      return NextResponse.json(
+        { error: "Failed to generate response" },
+        { status: 500 }
+      );
     }
-  } catch (error: any) {
-    console.error('Unexpected error in chat API:', error);
+  } catch (error) {
+    console.error("Error processing request:", error);
     return NextResponse.json(
-      {
-        error: 'An unexpected error occurred',
-        errorDetails: error.message
-      },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
