@@ -27,5 +27,9 @@
         }
       ]
     }
-  ]
+  ],
+  "env": {
+    "NEXTAUTH_URL": "https://health-insights-ai.vercel.app",
+    "NODE_ENV": "production"
+  }
 } 
