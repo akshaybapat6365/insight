@@ -1,3 +1,6 @@
+// Specify Node.js runtime to ensure compatibility
+export const runtime = 'nodejs';
+
 import { PrismaClient } from '@prisma/client';
 
 // PrismaClient is attached to the `global` object in development to prevent

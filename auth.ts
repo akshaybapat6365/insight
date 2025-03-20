@@ -1,3 +1,6 @@
+// Specify Node.js runtime to avoid edge runtime incompatibility with Prisma
+export const runtime = 'nodejs';
+
 import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
