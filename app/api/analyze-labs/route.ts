@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { loadConfig } from '@/lib/config';
-import { getGeminiModel, fallbackModel } from '@/lib/ai/gemini-provider';
+import { getGeminiModel, fallbackModel, createFreshGeminiClient } from '@/lib/ai/gemini-provider';
 
 // Configure request size limits and timeout
 export const config = {
@@ -229,10 +229,16 @@ User Message: ${userMessage}`
       if (config.useFallback) {
         try {
           console.log('Attempting with fallback model...');
-          const fallbackResponse = await fallbackModel({
-            prompt: `Analyze this lab report and explain what it means for health:\n${extractedText}\n\nUser asked: ${userMessage}`,
-            maxTokens: 2048
-          });
+          // Create a new Gemini client with the fallback model
+          const freshClient = createFreshGeminiClient();
+          if (!freshClient) {
+            throw new Error('API key not configured for fallback model');
+          }
+          
+          const genModel = freshClient.getGenerativeModel({ model: fallbackModel });
+          const prompt = `Analyze this lab report and explain what it means for health:\n${extractedText}\n\nUser asked: ${userMessage}`;
+          const result = await genModel.generateContent(prompt);
+          const fallbackResponse = result.response.text();
           
           return NextResponse.json({
             success: true,

@@ -2,7 +2,8 @@
 export const runtime = 'nodejs';
 
 import { PrismaClient } from '@prisma/client';
-import { existsSync } from 'fs';
+// Remove direct fs import
+// import { existsSync } from 'fs';
 
 // PrismaClient is attached to the `global` object in development to prevent
 // exhausting your database connection limit.
@@ -23,15 +24,26 @@ if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = dbUrl;
   isUsingFallback = true;
   
-  // Check if SQLite file exists
-  if (!existsSync(dbPath)) {
-    console.warn('⚠️ SQLite database file not found.');
-    console.warn('To set up the database, run:');
-    console.warn('1. npx prisma generate');
-    console.warn('2. npx prisma migrate dev --name init');
-    
-    // We'll try to continue, but some operations may fail
-    console.warn('Attempting to continue without database migrations...');
+  // Dynamically import fs in a way that's compatible with Next.js
+  try {
+    // Check if running on server side
+    if (typeof window === 'undefined') {
+      const fs = require('fs');
+      // Check if SQLite file exists
+      if (!fs.existsSync(dbPath)) {
+        console.warn('⚠️ SQLite database file not found.');
+        console.warn('To set up the database, run:');
+        console.warn('1. npx prisma generate');
+        console.warn('2. npx prisma migrate dev --name init');
+        
+        // We'll try to continue, but some operations may fail
+        console.warn('Attempting to continue without database migrations...');
+      }
+    } else {
+      console.warn('⚠️ Running in browser environment. File system checks skipped.');
+    }
+  } catch (error) {
+    console.warn('⚠️ Error checking database file:', error);
   }
 }
 
