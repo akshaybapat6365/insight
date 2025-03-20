@@ -12,8 +12,11 @@ import ReactMarkdown from 'react-markdown';
 import { Bot, User, LineChart, Microscope } from 'lucide-react';
 import Link from 'next/link';
 import { AuthButtons } from '@/components/auth-buttons';
+import { useUser } from '@clerk/nextjs';
 
 export default function Chat() {
+  const { user } = useUser();
+  
   const {
     error,
     input,
@@ -26,6 +29,9 @@ export default function Chat() {
     setInput,
   } = useChat({
     api: '/api/chat',
+    body: {
+      userId: user?.id || 'anonymous',
+    },
     onFinish(message, { usage, finishReason }) {
       console.log('Chat message completed:', message);
       console.log('Finish reason:', finishReason);
