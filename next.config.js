@@ -9,6 +9,9 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_ADMIN_KEY: process.env.NEXT_PUBLIC_ADMIN_KEY || 'adminpass',
   },
+  images: {
+    domains: ['assets.example.com'],
+  },
 };
 
 module.exports = nextConfig;
