@@ -6,7 +6,13 @@ type Message = {
   id?: string;
 };
 
-export async function saveChat(userId: string, chatId: string, messages: Message[]) {
+interface SaveChatParams {
+  userId: string;
+  chatId: string;
+  messages: Message[];
+}
+
+export async function saveChat({ userId, chatId, messages }: SaveChatParams) {
   try {
     // Generate a title from the first user message 
     const firstUserMessage = messages.find(m => m.role === 'user')?.content || 'New Chat';
