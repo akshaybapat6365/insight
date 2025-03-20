@@ -12,8 +12,15 @@ export const fallbackModel = "gemini-1.5-pro";
 
 /**
  * Gets the API key from config file or falls back to environment variable
+ * Logs helpful messages if API key is not found
  */
 function getApiKey(): string {
+  // First try to get from environment variable (highest priority)
+  if (process.env.GEMINI_API_KEY) {
+    return process.env.GEMINI_API_KEY;
+  }
+
+  // Then try to get from config file
   try {
     if (fs.existsSync(CONFIG_PATH)) {
       const configData = fs.readFileSync(CONFIG_PATH, 'utf8');
@@ -23,22 +30,30 @@ function getApiKey(): string {
       }
     }
   } catch (error) {
-    console.error('Error reading API key from config:', error);
+    console.error('Error reading API key from config file:', error);
   }
   
-  return process.env.GEMINI_API_KEY || '';
+  // Log helpful messages if API key is not found
+  console.error('GEMINI_API_KEY not found in environment variables or config file.');
+  console.error('Please set the GEMINI_API_KEY environment variable or update the config.json file.');
+  
+  return '';
 }
-
-// Initialize the Google AI SDK with the API key from config or environment
-export const genAI = new GoogleGenerativeAI(getApiKey());
 
 /**
- * Creates a new instance of the Google AI SDK with the latest API key
- * This ensures we always use the most up-to-date API key from the config
+ * Initialize the Google AI SDK with the API key from config or environment
+ * Returns null if no API key is available
  */
-export function createFreshGeminiClient(): GoogleGenerativeAI {
-  return new GoogleGenerativeAI(getApiKey());
+export function createFreshGeminiClient(): GoogleGenerativeAI | null {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    return null;
+  }
+  return new GoogleGenerativeAI(apiKey);
 }
+
+// Initialize the client (may be null if no API key)
+export const genAI = createFreshGeminiClient();
 
 // Function to get the appropriate model based on availability and config
 export function getGeminiModel(): string {
@@ -61,6 +76,11 @@ export function getGeminiModel(): string {
 export async function generateContentWithGemini(prompt: string) {
   // Always create a fresh client to ensure we have the latest API key
   const freshClient = createFreshGeminiClient();
+  
+  if (!freshClient) {
+    throw new Error('API key not configured. Please set the GEMINI_API_KEY environment variable.');
+  }
+  
   try {
     const model = getGeminiModel();
     console.log(`Using Gemini model: ${model}`);

@@ -6,6 +6,7 @@ import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { getChatById } from '@/lib/services/chat-service';
+import { ErrorBanner } from '@/components/ui/error-banner';
 
 interface ChatMessage {
   id: string;
@@ -44,7 +45,7 @@ export default function ChatPage({ params }: { params: { id: string } }) {
           }
         } catch (err) {
           console.error('Error fetching chat:', err);
-          setError('Failed to load chat');
+          setError('Failed to load chat. Please try again later.');
         }
       };
 
@@ -97,9 +98,9 @@ export default function ChatPage({ params }: { params: { id: string } }) {
       if (params.id === 'new' && data.chatId) {
         router.push(`/chat/${data.chatId}`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error sending message:', err);
-      setError('Failed to send message. Please try again.');
+      setError(err.message || 'Failed to send message. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -107,32 +108,38 @@ export default function ChatPage({ params }: { params: { id: string } }) {
 
   if (status === 'loading') {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="animate-pulse h-4 w-48 bg-gray-700 rounded"></div>
+      <div className="flex justify-center items-center h-screen bg-black">
+        <div className="flex space-x-2">
+          <div className="w-3 h-3 bg-gray-500 rounded-full animate-pulse"></div>
+          <div className="w-3 h-3 bg-gray-500 rounded-full animate-pulse delay-75"></div>
+          <div className="w-3 h-3 bg-gray-500 rounded-full animate-pulse delay-150"></div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto max-w-4xl p-4 h-screen flex flex-col">
+    <div className="container mx-auto max-w-4xl p-4 h-screen flex flex-col bg-black">
+      {error && <ErrorBanner message={error} onClose={() => setError(null)} />}
+      
       <div className="flex items-center justify-between mb-4">
         <Button
           onClick={() => router.push('/chat')}
           variant="outline"
-          className="border-gray-700 text-gray-300"
+          className="border-gray-800 text-gray-300 hover:bg-gray-900"
         >
           Back to Chats
         </Button>
         
         <Button
           onClick={() => router.push('/chat/new')}
-          className="bg-blue-600 hover:bg-blue-700"
+          className="bg-black-light hover:bg-gray-900 text-white"
         >
           New Chat
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto mb-4 space-y-4 p-4 rounded-lg bg-gray-900 border border-gray-800">
+      <div className="flex-1 overflow-y-auto mb-4 space-y-4 p-4 rounded-lg bg-black border border-dark">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center p-6">
             <h2 className="text-xl font-semibold text-gray-300 mb-2">
@@ -152,8 +159,8 @@ export default function ChatPage({ params }: { params: { id: string } }) {
               key={message.id}
               className={`p-3 rounded-lg ${
                 message.role === 'user'
-                  ? 'bg-blue-900 ml-8'
-                  : 'bg-gray-800 mr-8'
+                  ? 'bg-gray-900 ml-8 border-l-2 border-blue-700'
+                  : 'bg-black-light mr-8 border-l-2 border-gray-700'
               }`}
             >
               <div className="font-semibold text-xs text-gray-400 mb-1">
@@ -168,15 +175,13 @@ export default function ChatPage({ params }: { params: { id: string } }) {
         <div ref={messagesEndRef} />
       </div>
 
-      {error && <div className="text-red-500 mb-2 text-center">{error}</div>}
-
       <form onSubmit={handleSubmit} className="flex gap-2">
         <Textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Type your message here..."
           disabled={isLoading}
-          className="flex-1 bg-gray-800 border-gray-700 focus:border-blue-600"
+          className="flex-1 bg-black-light border-dark focus:border-gray-600 text-white"
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
@@ -187,7 +192,7 @@ export default function ChatPage({ params }: { params: { id: string } }) {
         <Button
           type="submit"
           disabled={isLoading || !input.trim()}
-          className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700"
+          className="bg-gray-900 hover:bg-gray-800 disabled:bg-black-light disabled:text-gray-600 text-white"
         >
           {isLoading ? 'Sending...' : 'Send'}
         </Button>

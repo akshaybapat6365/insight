@@ -1,6 +1,6 @@
 {
-  "name": "next-openai",
-  "version": "0.0.0",
+  "name": "health-insights-ai",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",

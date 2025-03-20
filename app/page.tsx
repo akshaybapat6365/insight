@@ -48,7 +48,7 @@ export default function Chat() {
   return (
     <div className="flex flex-col h-screen bg-black">
       {/* Header */}
-      <header className="border-b border-gray-800 bg-black p-4">
+      <header className="border-b border-dark bg-black p-4">
         <div className="container flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-medium text-white">Health Insights AI</h1>
@@ -82,92 +82,95 @@ export default function Chat() {
             <FileUpload onFileProcessed={handleFileProcessed} />
             
             {/* Health Features */}
-            <div className="mt-4 border border-gray-800 rounded-lg p-4 bg-black">
+            <div className="mt-4 border border-dark rounded-lg p-4 bg-black-light">
               <h3 className="text-sm font-semibold text-white mb-3">Health Features</h3>
               <div className="space-y-2">
-                <Link href="/health-analyzer" className="flex items-center p-2 rounded-md hover:bg-gray-900 text-gray-400 hover:text-white transition-colors">
-                  <Microscope className="h-4 w-4 mr-2" />
-                  <span className="text-sm">Lab Report Analyzer</span>
-                </Link>
-                <Link href="/health-trends" className="flex items-center p-2 rounded-md hover:bg-gray-900 text-gray-400 hover:text-white transition-colors">
+                <Link 
+                  href="/health-trends" 
+                  className="flex items-center text-sm text-gray-300 hover:text-white p-2 rounded hover:bg-black transition-colors"
+                >
                   <LineChart className="h-4 w-4 mr-2" />
-                  <span className="text-sm">Health Trends Tracker</span>
+                  Health Trends
+                </Link>
+                <Link 
+                  href="/health-analyzer" 
+                  className="flex items-center text-sm text-gray-300 hover:text-white p-2 rounded hover:bg-black transition-colors"
+                >
+                  <Microscope className="h-4 w-4 mr-2" />
+                  Lab Analyzer
                 </Link>
               </div>
             </div>
           </div>
           
           {/* Main chat area */}
-          <div className="md:col-span-8 flex flex-col">
-            <div className="flex-1 overflow-auto bg-black border border-gray-800 rounded-lg p-4 mb-4">
-              {messages.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-center">
-                  <div className="max-w-sm space-y-4">
-                    <div className="h-12 w-12 mx-auto rounded-full bg-gray-900 flex items-center justify-center">
-                      <Bot className="h-6 w-6 text-gray-400" />
-                    </div>
-                    <h2 className="text-lg font-semibold text-white">
-                      Health Insights AI
-                    </h2>
-                    <p className="text-sm text-gray-400">
-                      Upload your health data or ask questions about medical terminology and lab results.
+          <div className="md:col-span-8">
+            <div className="border border-dark bg-black-light rounded-lg p-4 h-[calc(100vh-12rem)] flex flex-col">
+              <div className="flex-1 overflow-y-auto mb-4">
+                {messages.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-6">
+                    <h2 className="text-xl font-semibold text-gray-300 mb-2">Welcome to Health Insights AI</h2>
+                    <p className="text-gray-400 max-w-md">
+                      Upload your health data or ask questions about health topics, lab results, or medical terminology.
+                    </p>
+                    <p className="text-xs text-gray-500 mt-4">
+                      This tool provides educational information only, not medical advice.
                     </p>
                   </div>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {messages.map((m, i) => (
-                    <div
-                      key={i}
-                      className={`flex ${
-                        m.role === 'user' ? 'justify-end' : 'justify-start'
-                      }`}
-                    >
+                ) : (
+                  <div className="space-y-4">
+                    {messages.map((m) => (
                       <div
-                        className={`rounded-lg px-4 py-2 max-w-[85%] ${
+                        key={m.id}
+                        className={`p-3 rounded-lg ${
                           m.role === 'user'
-                            ? 'bg-gray-800 text-white'
-                            : 'bg-gray-900 text-gray-100'
+                            ? 'bg-black ml-8 border-l-2 border-gray-700'
+                            : 'bg-black-lighter mr-8 border-l-2 border-gray-600'
                         }`}
                       >
-                        <ReactMarkdown>
-                          {m.content}
-                        </ReactMarkdown>
-                      </div>
-                    </div>
-                  ))}
-                  {isLoading && (
-                    <div className="flex justify-start">
-                      <div className="rounded-lg px-4 py-2 max-w-[85%] bg-gray-900">
-                        <div className="flex space-x-2 items-center">
-                          <div className="w-2 h-2 rounded-full bg-gray-500 animate-pulse"></div>
-                          <div className="w-2 h-2 rounded-full bg-gray-500 animate-pulse delay-75"></div>
-                          <div className="w-2 h-2 rounded-full bg-gray-500 animate-pulse delay-150"></div>
+                        <div className="text-xs text-gray-400 mb-1">
+                          {m.role === 'user' ? 'You' : 'Health Assistant'}
+                        </div>
+                        <div className="prose prose-invert max-w-none">
+                          <ReactMarkdown>{m.content}</ReactMarkdown>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    ))}
+                  </div>
+                )}
+              </div>
+              
+              {error && (
+                <div className="mb-4 p-3 bg-red-900/30 border border-red-800/50 rounded-md text-red-200 text-sm">
+                  {error.toString()}
                 </div>
               )}
+              
+              <form 
+                onSubmit={handleSubmit}
+                className="flex gap-2"
+              >
+                <Input
+                  value={input}
+                  onChange={handleInputChange}
+                  placeholder="Ask a health question..."
+                  className="flex-1 bg-black border-dark text-white"
+                  disabled={isLoading}
+                />
+                <Button 
+                  type="submit"
+                  className="bg-gray-900 hover:bg-gray-800 text-white transition-colors"
+                  disabled={isLoading || !input.trim()}
+                >
+                  {isLoading ? 'Thinking...' : 'Ask'}
+                </Button>
+              </form>
             </div>
-
-            <form onSubmit={handleSubmit} className="flex space-x-2">
-              <Input
-                value={input}
-                onChange={handleInputChange}
-                placeholder="Ask about your health data or lab results..."
-                className="flex-1 bg-gray-900 border-gray-800 text-white placeholder:text-gray-500"
-              />
-              <Button type="submit" disabled={isLoading} className="bg-gray-800 hover:bg-gray-700 text-white">
-                Send
-              </Button>
-            </form>
-            <p className="text-xs text-gray-600 mt-2 text-center">
-              Note: This AI assistant provides educational information only, not medical advice.
-            </p>
           </div>
+          
         </div>
       </div>
+      
     </div>
   );
 }

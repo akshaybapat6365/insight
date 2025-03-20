@@ -5,7 +5,7 @@
 :root {
   --foreground-rgb: 229, 231, 235;
   --background-start-rgb: 0, 0, 0;
-  --background-end-rgb: 10, 10, 10;
+  --background-end-rgb: 0, 0, 0;
 }
 
 body {
@@ -44,6 +44,23 @@ body {
     --input: 0 0% 15%;
     --ring: 0 0% 30%;
   }
+}
+
+/* Black theme utility classes */
+.bg-black-light {
+  background-color: #111;
+}
+
+.bg-black-lighter {
+  background-color: #222;
+}
+
+.bg-black-dark {
+  background-color: #000;
+}
+
+.border-dark {
+  border-color: #333;
 }
 
 /* Add custom prose styling for markdown */
