@@ -2,20 +2,24 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useUser } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { getChatById } from '@/lib/services/chat-service';
 import { ErrorBanner } from '@/components/ui/error-banner';
 
 interface ChatMessage {
-  id: string;
+  id?: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
 }
 
-export default function ChatPage({ params }: { params: { id: string } }) {
-  const { data: session, status } = useSession();
+interface PageProps {
+  params: { id: string };
+}
+
+export default function ChatPage({ params }: PageProps) {
+  const { user, isLoaded } = useUser();
   const router = useRouter();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -25,21 +29,18 @@ export default function ChatPage({ params }: { params: { id: string } }) {
 
   // Fetch chat if ID is provided and not 'new'
   useEffect(() => {
-    if (status === 'loading') return;
+    if (!isLoaded) return;
     
-    // If not authenticated, redirect to login
-    if (status === 'unauthenticated') {
-      router.push('/auth/signin');
+    // If not authenticated, redirect to sign-in
+    if (!user) {
+      router.push('/sign-in');
       return;
     }
 
-    if (params.id !== 'new' && session?.user?.id) {
+    if (params.id !== 'new' && user?.id) {
       const fetchChat = async () => {
         try {
-          // Ensure user id exists before calling API
-          if (!session.user || !session.user.id) return;
-          
-          const chatData = await getChatById(session.user.id, params.id);
+          const chatData = await getChatById(params.id, user.id);
           if (chatData && chatData.messages) {
             setMessages(chatData.messages as ChatMessage[]);
           }
@@ -51,7 +52,7 @@ export default function ChatPage({ params }: { params: { id: string } }) {
 
       fetchChat();
     }
-  }, [params.id, router, session?.user?.id, status]);
+  }, [params.id, router, user, isLoaded]);
 
   // Scroll to bottom of messages
   useEffect(() => {
@@ -83,6 +84,7 @@ export default function ChatPage({ params }: { params: { id: string } }) {
         body: JSON.stringify({
           messages: [...messages, userMessage],
           chatId: params.id === 'new' ? undefined : params.id,
+          userId: user?.id,
         }),
       });
       
@@ -92,7 +94,10 @@ export default function ChatPage({ params }: { params: { id: string } }) {
         throw new Error(data.error || 'Failed to get response');
       }
       
-      setMessages((prev) => [...prev, data.message]);
+      setMessages((prev) => [...prev, {
+        role: 'assistant',
+        content: data.content
+      }]);
       
       // If this was a new chat, update URL to the new chat ID
       if (params.id === 'new' && data.chatId) {
@@ -106,7 +111,7 @@ export default function ChatPage({ params }: { params: { id: string } }) {
     }
   };
 
-  if (status === 'loading') {
+  if (!isLoaded) {
     return (
       <div className="flex justify-center items-center h-screen bg-black">
         <div className="flex space-x-2">
@@ -154,9 +159,9 @@ export default function ChatPage({ params }: { params: { id: string } }) {
             </p>
           </div>
         ) : (
-          messages.map((message) => (
+          messages.map((message, index) => (
             <div
-              key={message.id}
+              key={message.id || index}
               className={`p-3 rounded-lg ${
                 message.role === 'user'
                   ? 'bg-gray-900 ml-8 border-l-2 border-blue-700'
