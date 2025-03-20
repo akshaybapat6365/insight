@@ -4,7 +4,7 @@ export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { loadConfig } from '@/lib/config';
-import { getGeminiModel, fallbackModel, createFreshGeminiClient } from '@/lib/ai/gemini-provider';
+import { geminiModel, fallbackModel, createFreshGeminiClient } from '@/lib/ai/gemini-provider';
 import { auth } from '@/auth';
 import { saveChat } from '@/lib/services/chat-service';
 
@@ -58,8 +58,7 @@ export async function POST(req: Request) {
     }
 
     // Configure AI settings
-    const modelName = getGeminiModel();
-    const fallbackModelName = fallbackModel;
+    const modelName = geminiModel;
     console.log(`Using model: ${modelName} for chat`);
 
     // Map messages for Gemini API format
@@ -109,10 +108,10 @@ export async function POST(req: Request) {
       console.error('Error with primary model:', error);
       
       try {
-        console.log(`Falling back to ${fallbackModelName}`);
+        console.log(`Falling back to ${fallbackModel}`);
         
         // Try with fallback model
-        const fallbackModelInstance = genAI.getGenerativeModel({ model: fallbackModelName });
+        const fallbackModelInstance = genAI.getGenerativeModel({ model: fallbackModel });
         
         // Start a chat session with fallback model
         const fallbackChat = fallbackModelInstance.startChat({
