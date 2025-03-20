@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import ReactMarkdown from 'react-markdown';
 import { Bot, User, LineChart, Microscope } from 'lucide-react';
 import Link from 'next/link';
+import { AuthButtons } from '@/components/auth-buttons';
 
 export default function Chat() {
   const {
@@ -53,6 +54,7 @@ export default function Chat() {
             <h1 className="text-lg font-medium text-white">Health Insights AI</h1>
           </div>
           <div className="flex items-center gap-4">
+            <AuthButtons />
             <a 
               href={adminUrl}
               className="text-gray-400 hover:text-white text-sm flex items-center gap-1.5"

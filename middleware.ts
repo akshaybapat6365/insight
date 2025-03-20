@@ -1,32 +1,37 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { auth } from './auth'
 
-export function middleware(request: NextRequest) {
-  // Check if the URL starts with /admin
-  if (request.nextUrl.pathname.startsWith('/admin')) {
-    console.log('Protected route accessed:', request.nextUrl.pathname);
+export async function middleware(request: NextRequest) {
+  // Get the pathname of the request
+  const path = request.nextUrl.pathname;
+
+  // Admin authentication using both NextAuth and password parameter
+  if (path.startsWith('/admin')) {
+    // Check for password in URL for legacy support
+    const url = request.nextUrl.clone();
+    const keyParam = url.searchParams.get('key');
+    const adminPassword = process.env.ADMIN_PASSWORD || 'adminpass';
     
-    // Get the admin password from query parameter
-    const adminPassword = request.nextUrl.searchParams.get('key')
-    console.log('Admin password in URL:', adminPassword ? 'Password provided' : 'No password');
-    
-    // Log environment variable presence (not the actual value for security)
-    console.log('ADMIN_PASSWORD environment variable:', process.env.ADMIN_PASSWORD ? 'Set' : 'Not set');
-    
-    // Use a default password if environment variable isn't set
-    const expectedPassword = process.env.ADMIN_PASSWORD || 'adminpass';
-    
-    // Check if password matches (a very basic approach - not secure for production)
-    // In a real app, use proper authentication with NextAuth.js or similar
-    if (adminPassword !== expectedPassword) {
-      console.log('Password mismatch, redirecting to home');
-      return NextResponse.redirect(new URL('/', request.url))
+    // If the key parameter matches the admin password, allow access
+    if (keyParam === adminPassword) {
+      return NextResponse.next();
     }
     
-    console.log('Authentication successful for:', request.nextUrl.pathname);
+    // Otherwise, check for authenticated session
+    const session = await auth();
+    const adminEmail = process.env.ADMIN_EMAIL;
+    
+    // If no session or session email doesn't match admin email, redirect to sign in
+    if (!session?.user || (adminEmail && session.user.email !== adminEmail)) {
+      // Redirect unauthenticated users to the sign-in page with a return URL
+      return NextResponse.redirect(
+        new URL(`/auth/signin?callbackUrl=${encodeURIComponent(path)}`, request.url)
+      );
+    }
   }
-  
-  return NextResponse.next()
+
+  return NextResponse.next();
 }
 
 export const config = {
