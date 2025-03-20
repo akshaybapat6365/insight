@@ -52,68 +52,6 @@ export const config = {
   maxDuration: 60, // Increase timeout for file processing (60 seconds)
 }
 
-// Rate limiting implementation
-const RATE_LIMIT_MAX = 15; // Maximum files per window (lower than chat since files are more costly)
-const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute window
-
-// Simple in-memory rate limiting store (use Redis in production)
-const rateLimitStore: Record<string, { count: number, resetAt: number }> = {};
-
-// Rate limiting function
-function checkRateLimit(identifier: string): { limited: boolean, resetIn?: number } {
-  const now = Date.now();
-  const userRateLimit = rateLimitStore[identifier];
-  
-  // If no existing rate limit or window expired, create new entry
-  if (!userRateLimit || userRateLimit.resetAt < now) {
-    rateLimitStore[identifier] = { count: 1, resetAt: now + RATE_LIMIT_WINDOW };
-    return { limited: false };
-  }
-  
-  // If under limit, increment
-  if (userRateLimit.count < RATE_LIMIT_MAX) {
-    userRateLimit.count++;
-    return { limited: false };
-  }
-  
-  // Rate limited
-  return { 
-    limited: true, 
-    resetIn: Math.ceil((userRateLimit.resetAt - now) / 1000) 
-  };
-}
-
-// Rate limiting implementation
-const RATE_LIMIT_MAX = 15; // Maximum files per window (lower than chat since files are more costly)
-const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute window
-
-// Simple in-memory rate limiting store (use Redis in production)
-const rateLimitStore: Record<string, { count: number, resetAt: number }> = {};
-
-// Rate limiting function
-function checkRateLimit(identifier: string): { limited: boolean, resetIn?: number } {
-  const now = Date.now();
-  const userRateLimit = rateLimitStore[identifier];
-  
-  // If no existing rate limit or window expired, create new entry
-  if (!userRateLimit || userRateLimit.resetAt < now) {
-    rateLimitStore[identifier] = { count: 1, resetAt: now + RATE_LIMIT_WINDOW };
-    return { limited: false };
-  }
-  
-  // If under limit, increment
-  if (userRateLimit.count < RATE_LIMIT_MAX) {
-    userRateLimit.count++;
-    return { limited: false };
-  }
-  
-  // Rate limited
-  return { 
-    limited: true, 
-    resetIn: Math.ceil((userRateLimit.resetAt - now) / 1000) 
-  };
-}
-
 export async function POST(request: Request) {
   try {
     // Apply rate limiting by IP
@@ -250,33 +188,20 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
-  } catch (error: any) {
-    console.error('Error processing file:', error)
     
-    // Create user-friendly error message with appropriate details
+  } catch (error: any) {
+    console.error('Error in file upload route:', error);
     return NextResponse.json(
-      { 
-        error: `An error occurred during file processing: ${error.message || 'Unknown error'}`,
-        success: false,
-        errorType: error.name || 'ServerError',
-        // Only include stack trace in development
-        ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
-      },
+      { error: `Server error: ${error.message || 'Unknown error'}` },
       { status: 500 }
-    )
+    );
   }
 }
 
-// Process CSV files
+// Process CSV file
 async function processCsvFile(file: File): Promise<string> {
   try {
-    // Get the file content as text
     const csvText = await file.text();
-    
-    // Handle empty files
-    if (!csvText.trim()) {
-      return "The CSV file appears to be empty.";
-    }
     
     // Split by common CSV delimiters to detect the correct one
     const possibleDelimiters = [',', ';', '\t', '|'];
@@ -287,4 +212,74 @@ async function processCsvFile(file: File): Promise<string> {
     for (const del of possibleDelimiters) {
       const sampleRow = csvText.split('\n')[0];
       const columnCount = sampleRow.split(del).length;
-      if (columnCount > max
+      if (columnCount > maxColumns) {
+        maxColumns = columnCount;
+        delimiter = del;
+      }
+    }
+    
+    // Return the detected delimiter
+    return csvText;
+  } catch (error: any) {
+    console.error('Error processing CSV file:', error);
+    return `Error processing CSV file: ${error.message || 'Unknown error'}`;
+  }
+}
+
+// Process Excel file
+async function processExcelFile(file: File): Promise<string> {
+  try {
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: 'array' });
+    
+    // Extract text from all sheets
+    let fullText = [];
+    
+    // Process each sheet
+    for (const sheetName of workbook.SheetNames) {
+      const sheet = workbook.Sheets[sheetName];
+      const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+      
+      // Add sheet name as header
+      fullText.push(`\n## Sheet: ${sheetName}`);
+      
+      // Convert rows to text
+      for (const row of data) {
+        if (Array.isArray(row) && row.length > 0) {
+          fullText.push(row.join('\t'));
+        }
+      }
+    }
+    
+    return fullText.join('\n');
+  } catch (error: any) {
+    console.error('Error processing Excel file:', error);
+    return `Error processing Excel file: ${error.message || 'Unknown error'}`;
+  }
+}
+
+// Handle PDF file processing
+async function handlePdfFile(request: Request, formData: FormData, file: File) {
+  // Forward to Python API for processing PDFs
+  const forwardResponse = await fetch(new URL('/api/python-process-file', request.url), {
+    method: 'POST',
+    body: formData,
+  });
+  
+  // Return the forwarded response directly
+  const data = await forwardResponse.json();
+  return NextResponse.json(data, { status: forwardResponse.status });
+}
+
+// Handle image file processing (forward to more capable processor)
+async function handleImageFile(request: Request, formData: FormData, file: File) {
+  // Forward to Python API for image processing which has OCR capabilities
+  const forwardResponse = await fetch(new URL('/api/python-process-file', request.url), {
+    method: 'POST',
+    body: formData,
+  });
+  
+  // Return the forwarded response directly
+  const data = await forwardResponse.json();
+  return NextResponse.json(data, { status: forwardResponse.status });
+}

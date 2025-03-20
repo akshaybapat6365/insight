@@ -1,7 +1,5 @@
 import { Message, generateId as aiGenerateId } from 'ai';
 import { prisma, isUsingFallback } from '@/lib/db/prisma';
-import { existsSync, mkdirSync } from 'fs';
-import { readFile, writeFile } from 'fs/promises';
 import path from 'path';
 
 // Define interfaces for chat data
@@ -145,9 +143,12 @@ export async function deleteChat(chatId: string, userId: string) {
       // If database fails, try to delete file
       console.warn('Database delete failed, attempting file deletion:', dbError);
       const chatFile = getChatFile(chatId);
-      const fs = require('fs');
-      if (fs.existsSync(chatFile)) {
-        fs.unlinkSync(chatFile);
+      // Dynamically import fs
+      if (typeof window === 'undefined') {
+        const fs = require('fs');
+        if (fs.existsSync(chatFile)) {
+          fs.unlinkSync(chatFile);
+        }
       }
       return { id: chatId, deleted: true };
     }
@@ -174,7 +175,10 @@ export async function createChat(userId: string): Promise<string> {
   } catch (dbError) {
     // Fall back to file creation
     console.warn('Database creation failed, falling back to file system:', dbError);
-    await writeFile(getChatFile(id), '[]');
+    if (typeof window === 'undefined') {
+      const fsPromises = require('fs/promises');
+      await fsPromises.writeFile(getChatFile(id), '[]');
+    }
   }
   
   return id;
@@ -197,16 +201,29 @@ function generateTitleFromMessage(message: string): string {
 // Helper functions for file-based operations
 function getChatFile(id: string): string {
   const chatDir = path.join(process.cwd(), '.chats');
-  if (!existsSync(chatDir)) mkdirSync(chatDir, { recursive: true });
+  if (typeof window === 'undefined') {
+    const fs = require('fs');
+    if (!fs.existsSync(chatDir)) fs.mkdirSync(chatDir, { recursive: true });
+  }
   return path.join(chatDir, `${id}.json`);
 }
 
 async function saveToFile({ id, messages }: { id: string; messages: Message[] }): Promise<void> {
-  await writeFile(getChatFile(id), JSON.stringify(messages, null, 2));
+  if (typeof window === 'undefined') {
+    const fsPromises = require('fs/promises');
+    await fsPromises.writeFile(getChatFile(id), JSON.stringify(messages, null, 2));
+  } else {
+    console.warn('Cannot save to file in browser environment');
+  }
 }
 
 async function loadFromFile(id: string): Promise<Message[]> {
-  return JSON.parse(await readFile(getChatFile(id), 'utf8'));
+  if (typeof window === 'undefined') {
+    const fsPromises = require('fs/promises');
+    return JSON.parse(await fsPromises.readFile(getChatFile(id), 'utf8'));
+  }
+  console.warn('Cannot load from file in browser environment');
+  return [];
 }
 
 // Generate a unique ID for new chats
