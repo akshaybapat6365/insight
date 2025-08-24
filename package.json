@@ -22,7 +22,7 @@
     "@ai-sdk/react": "1.1.23",
     "@ai-sdk/ui-utils": "1.1.19",
     "@auth/prisma-adapter": "^2.8.0",
-    "@clerk/nextjs": "^4.31.7",
+    "@clerk/nextjs": "^6.31.4",
     "@clerk/themes": "^2.2.22",
     "@google/genai": "^0.3.1",
     "@google/generative-ai": "^0.24.0",
